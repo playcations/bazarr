@@ -97,6 +97,16 @@ const SettingsSubtitlesSearchView: FunctionComponent = () => {
           devices).
         </Message>
         <Check
+          label="Search Each Provider Once For All Missing Languages"
+          settingKey="settings-general-shared_provider_discovery"
+        ></Check>
+        <Message>
+          Ask every provider once for all the missing subtitles of a movie or
+          episode instead of once per missing language. Each language is still
+          scored and chosen on its own, and cutoff is still respected. Reduces
+          provider requests for profiles with multiple languages.
+        </Message>
+        <Check
           label="Skip video file hash calculation"
           settingKey="settings-general-skip_hashing"
         ></Check>

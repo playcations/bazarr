@@ -9,7 +9,7 @@ import ast
 
 from subzero.language import Language
 from subliminal_patch.core import save_subtitles
-from subliminal_patch.core_persistent import download_best_subtitles
+from subliminal_patch.core_persistent import download_best_subtitles, list_candidates, select_best_subtitles
 
 from app.config import settings, get_array_from
 from app.database import TableEpisodes, TableMovies, database, select, get_profiles_list
@@ -63,12 +63,20 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
         subz_mods = get_array_from(settings.general.subzero_mods)
         saved_any = False
 
+        shared_discovery = settings.general.shared_provider_discovery
+        if shared_discovery:
+            language_set = _sort_by_profile(language_set, profile)
+        # candidates listed once per hearing-impaired group, see _list_shared_candidates
+        shared_candidates = {}
+        saved_ids = set()
+
         if providers:
             if forced_minimum_score:
                 min_score = int(forced_minimum_score) + 1
             for language in language_set:
                 # confirm if language is still missing or if cutoff has been reached
-                if check_if_still_required and language not in check_missing_languages(path, media_type):
+                still_missing = check_missing_languages(path, media_type) if check_if_still_required else None
+                if check_if_still_required and language not in still_missing:
                     # cutoff has been reached
                     logging.debug(f"BAZARR this language ({parse_language_object(language)}) is ignored because cutoff "
                                   f"has been reached during this search.")
@@ -77,13 +85,23 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
                     hi_mode = _get_hi_mode(profile, language)
 
                     try:
-                        downloaded_subtitles = download_best_subtitles(videos={video},
-                                                                       languages={language},
-                                                                       pool_instance=pool,
-                                                                       min_score=int(min_score),
-                                                                       hearing_impaired=hi_mode,
-                                                                       use_original_format=original_format in (1, "1", "True", True),
-                                                                       fallback_allowed=fallback_allowed)
+                        if shared_discovery:
+                            candidates = _list_shared_candidates(shared_candidates, video, language, language_set,
+                                                                 still_missing, pool)
+                            downloaded_subtitles = select_best_subtitles(candidates, video, language, pool,
+                                                                         min_score=int(min_score),
+                                                                         hearing_impaired=hi_mode,
+                                                                         use_original_format=original_format in (1, "1", "True", True),
+                                                                         fallback_allowed=fallback_allowed,
+                                                                         exclude_ids=saved_ids)
+                        else:
+                            downloaded_subtitles = download_best_subtitles(videos={video},
+                                                                           languages={language},
+                                                                           pool_instance=pool,
+                                                                           min_score=int(min_score),
+                                                                           hearing_impaired=hi_mode,
+                                                                           use_original_format=original_format in (1, "1", "True", True),
+                                                                           fallback_allowed=fallback_allowed)
                     except Exception as e:
                         logging.exception(f'BAZARR Error downloading Subtitles for this file {path}: {str(e)}')
                         return None
@@ -130,6 +148,7 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
                                 f'BAZARR Error saving Subtitles file to disk for this file {path}: {str(e)}')
                         else:
                             saved_any = True
+                            saved_ids.update((subtitle.provider_name, subtitle.id) for subtitle in saved_subtitles)
                             for subtitle in saved_subtitles:
                                 if "hash" in subtitle.matches:
                                     # make matches set cleaner for history purpose when hash matches
@@ -154,6 +173,33 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
     subliminal.region.backend.sync()
 
     logging.debug(f'BAZARR Ended searching Subtitles for file: {path}')
+
+
+def _list_shared_candidates(shared_candidates, video, language, language_set, still_missing, pool):
+    """List the providers once for every requirement of the same hearing-impaired group as language.
+
+    Providers filter hearing-impaired results differently depending on the languages they are asked for, so regular
+    and HI requirements are listed separately to get the same candidates as searching them one by one. Forced and
+    regular requirements share a listing and are told apart when selecting."""
+    group = bool(language.hi)
+    if group not in shared_candidates:
+        group_languages = {x for x in language_set
+                           if bool(x.hi) == group and (still_missing is None or x in still_missing)}
+        shared_candidates[group] = list_candidates(video, group_languages, pool)
+    return shared_candidates[group]
+
+
+def _sort_by_profile(language_set, profile):
+    """Order requirements like the profile items so cutoff is evaluated in a predictable order."""
+    def position(language):
+        lang_alpha2 = alpha2_from_alpha3(language.alpha3)
+        for index, item in enumerate(profile['items']):
+            if item['language'] == lang_alpha2 and item['forced'] == ("True" if language.forced else "False") and \
+                    (item['hi'] == "True") == bool(language.hi):
+                return index
+        return len(profile['items'])
+
+    return sorted(language_set, key=lambda x: (position(x), str(x), bool(x.hi)))
 
 
 def _get_hi_mode(profile, language):
