@@ -1,7 +1,8 @@
 # FR2 — Shared provider discovery (one listing per media item)
 
 Branch: `feature/shared-provider-discovery` (from `upstream/development`)
-Status: planned — first feature to implement (FR1 phase B reuses its helpers).
+Status: implemented on `feature/shared-provider-discovery` (stacked on `fix/hi-mode-profile-lookup`); unit tested,
+needs live-instance validation.
 Sources: `../source/fr2-multi-requirement-provider-search-notes.md`, `../source/combined-spec-fr1-fr2-fr3.md` §2/§7, verified in `../research/findings-2026-09-24.md` §2.
 
 ## Problem (verified)
@@ -20,7 +21,26 @@ The per-language loop exists for cutoff correctness (commit 2e2626ce, Nov 2022).
 Expected gain: ~2–3× fewer provider listing calls for items with multiple missing requirements. No gain for
 single-requirement items or upgrades (upgrade calls `generate_subtitles` one language at a time).
 
-## Design
+## As implemented
+
+- `core_persistent.list_candidates()` + `select_best_subtitles()` (exact forced filter, per-language shallow copy of
+  each candidate and its `matches`, excludes already saved `(provider, id)`), delegating to the unchanged
+  `SZProviderPool.download_best_subtitles`.
+- `generate_subtitles` lists **per hearing-impaired group**: regular + forced requirements share one listing, HI
+  requirements share another, each listed lazily when its first requirement is resolved (so a cutoff reached earlier
+  skips the HI listing entirely). Reason: providers differ in how they filter HI by requested language (addic7ed and
+  YIFY filter exactly, OpenSubtitles/SubDL/Subsource return both), so one union listing cannot reproduce the legacy
+  candidate set for every provider; forced is handled consistently by all audited providers, so an exact forced filter
+  at selection is enough. Resulting listings: `{fr, en}` 2→1, `{en, en:forced}` 2→1, `{en, en:hi, en:forced}` 3→2.
+- Requirements are resolved in profile order in shared mode (legacy path untouched).
+- Setting `general.shared_provider_discovery` (default off), Settings → Subtitles → Search.
+- The `hi_mode` lookup fix lives in its own branch `fix/hi-mode-profile-lookup` (`_get_hi_mode` helper).
+- Tests: `tests/bazarr/test_shared_provider_discovery.py` (listing counts, identical saved subtitles vs legacy,
+  forced isolation, cutoff stop in profile order, lazy HI listing, candidates not mutated),
+  `tests/bazarr/test_download_hi_mode.py`.
+- Not done yet: gestdown per-basename dedupe and #3585 ranking hook (only relevant once that PR lands).
+
+## Original design notes
 
 1. `core_persistent.py`
    - `list_candidates(video, languages, pool_instance) -> list[Subtitle]` — one `pool.list_subtitles()` for the union

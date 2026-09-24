@@ -20,17 +20,23 @@ Where a source document and a feature plan disagree, the feature plan (backed by
 
 All branch from `upstream/development` (CONTRIBUTING: features branch from `development`, never `master`).
 
-| Branch | Purpose | Upstream PR candidate |
-|---|---|---|
-| `docs/performance-features` | this folder | no (personal) |
-| `fix/adaptive-search-failed-attempts` | multi-language failed-attempt lost update; errored providers ≠ no match | yes, small |
-| `fix/provider-throttle-pool-thread-safety` | locks for throttle state/pools, atomic write, no `eval()` | yes, small |
-| `feature/shared-provider-discovery` | FR2 | yes |
-| `feature/subtitle-pack-reuse` | FR1 (phase B stacked on FR2) | yes, after FR2 |
-| `feature/parallel-wanted-scheduler` | FR3 | yes, after Discord discussion |
-| `integration/performance` | merge of all the above for personal use; rebuilt/rebased on development periodically | no |
+| Branch | Purpose | Base | Status | Upstream PR candidate |
+|---|---|---|---|---|
+| `docs/performance-features` | this folder | development | active | no (personal) |
+| `fix/adaptive-search-failed-attempts` | multi-language failed-attempt lost update; providers throttled mid-search no longer count as a miss | development | done, tested | yes, small |
+| `fix/provider-throttle-pool-thread-safety` | locks for throttle state/pools/provider init, atomic `throttled_providers.dat`, no `eval()` | development | done, tested | yes, small |
+| `fix/hi-mode-profile-lookup` | HI mode taken from the wrong profile item when a profile has regular + HI for a language | development | done, tested | yes, small |
+| `feature/shared-provider-discovery` | FR2 | `fix/hi-mode-profile-lookup` | done, tested (needs live validation) | yes, after the HI fix |
+| `feature/subtitle-pack-reuse` | FR1 (phase B stacked on FR2) | — | planned | yes, after FR2 |
+| `feature/parallel-wanted-scheduler` | FR3 | — | planned | yes, after Discord discussion |
+| `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
 Implementation order: fix branches → FR2 → FR1 → FR3.
+
+Testing: backend `venv/bin/python -m pytest tests/bazarr/` (Python 3.13 venv via `uv`; the two
+`test_utilities_video_analyzer` failures need ffprobe/mediainfo and fail on development too). Frontend:
+`cd frontend && npx vitest run <file> && npx tsc --noEmit && npx oxlint src`. A husky pre-commit hook runs
+pretty-quick and stylelint.
 
 ## Settings summary (every feature needs UI + backend options)
 
