@@ -48,6 +48,14 @@ describe("SettingsSubtitlesSearchView", () => {
     vitest.clearAllMocks();
   });
 
+  it("should render the shared provider discovery option", () => {
+    renderPage();
+
+    expect(
+      screen.getByText("Search Each Provider Once For All Missing Languages"),
+    ).toBeInTheDocument();
+  });
+
   it("should render expanded search sections", () => {
     renderPage();
 

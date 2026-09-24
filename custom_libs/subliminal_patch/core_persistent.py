@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 from collections import defaultdict
+import copy
 import logging
 import time
 
@@ -40,6 +41,69 @@ def download_subtitles(subtitles, pool_instance):
     for subtitle in subtitles:
         logger.info("Downloading subtitle %r with score %s", subtitle, subtitle.score)
         pool_instance.download_subtitle(subtitle)
+
+
+def list_candidates(video, languages, pool_instance):
+    """List subtitles once for several languages so each of them can then be resolved with select_best_subtitles."""
+    languages = set(languages) - video.subtitle_languages
+    if not languages:
+        return []
+
+    logger.info("Listing subtitles for %r and languages %r", video, languages)
+    subtitles = pool_instance.list_subtitles(video, languages)
+    logger.info("Found %d subtitle(s)", len(subtitles))
+    return subtitles
+
+
+def select_best_subtitles(
+    candidates,
+    video,
+    language,
+    pool_instance,
+    min_score=0,
+    hearing_impaired=False,
+    use_original_format=False,
+    fallback_allowed=False,
+    exclude_ids=None,
+):
+    """Download the best subtitles for a single language out of candidates previously listed with list_candidates.
+
+    Equivalent to download_best_subtitles(languages={language}) without listing the providers again.
+    """
+    downloaded_subtitles = defaultdict(list)
+
+    if not check_video(video, languages={language}):
+        logger.info("Skipping video %r", video)
+        return downloaded_subtitles
+
+    exclude_ids = exclude_ids or set()
+    subtitles = []
+    for candidate in candidates:
+        # a provider asked for a single language never returns the other forced variant
+        if bool(candidate.language.forced) != bool(language.forced):
+            continue
+        if (candidate.provider_name, candidate.id) in exclude_ids:
+            continue
+        # scoring and downloading modify the subtitle, so every language works on its own copy
+        subtitle = copy.copy(candidate)
+        if isinstance(getattr(candidate, 'matches', None), set):
+            subtitle.matches = set(candidate.matches)
+        subtitles.append(subtitle)
+
+    logger.info("Downloading best subtitles for %r and language %r", video, language)
+    subtitles = pool_instance.download_best_subtitles(
+        subtitles,
+        video,
+        {language},
+        min_score=min_score,
+        hearing_impaired=hearing_impaired,
+        use_original_format=use_original_format,
+        fallback_allowed=fallback_allowed,
+    )
+    logger.info("Downloaded %d subtitle(s)", len(subtitles))
+    downloaded_subtitles[video].extend(subtitles)
+
+    return downloaded_subtitles
 
 
 def download_best_subtitles(

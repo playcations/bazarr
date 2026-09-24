@@ -142,6 +142,7 @@ validators = [
     Validator('general.enabled_providers', must_exist=True, default=[], is_type_of=list),
     Validator('general.enabled_integrations', must_exist=True, default=[], is_type_of=list),
     Validator('general.multithreading', must_exist=True, default=True, is_type_of=bool),
+    Validator('general.shared_provider_discovery', must_exist=True, default=False, is_type_of=bool),
     Validator('general.chmod_enabled', must_exist=True, default=False, is_type_of=bool),
     Validator('general.enable_strm_support', must_exist=True, default=False, is_type_of=bool),
     Validator('general.chmod', must_exist=True, default='0640', is_type_of=str),

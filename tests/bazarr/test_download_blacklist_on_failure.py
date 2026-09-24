@@ -102,6 +102,7 @@ def _run_generate_subtitles(save_error):
     settings.general.utf8_encode = False
     settings.general.chmod_enabled = False
     settings.general.single_language = False
+    settings.general.shared_provider_discovery = False
 
     with mock.patch('subtitles.download.settings', settings), \
          mock.patch('subtitles.download.get_array_from', return_value=[]), \
