@@ -8,6 +8,7 @@ import datetime
 import socket
 import traceback
 import time
+import threading
 import operator
 import unicodedata
 import itertools
@@ -223,6 +224,10 @@ class SZProviderPool(ProviderPool):
         #: Initialized providers
         self.initialized_providers = {}
 
+        #: Pools are shared between jobs running in different threads
+        self._lock = threading.RLock()
+        self._init_locks = defaultdict(threading.Lock)
+
         #: Discarded providers
         self.discarded_providers = set()
 
@@ -249,6 +254,10 @@ class SZProviderPool(ProviderPool):
         self.provider_configs.update(provider_configs or {})
 
     def update(self, providers, provider_configs, blacklist, ban_list, language_equals=None):
+        with self._lock:
+            return self._update(providers, provider_configs, blacklist, ban_list, language_equals)
+
+    def _update(self, providers, provider_configs, blacklist, ban_list, language_equals=None):
         # Check if the pool was initialized enough hours ago
         self._check_lifetime()
 
@@ -305,15 +314,29 @@ class SZProviderPool(ProviderPool):
     def __getitem__(self, name):
         if name not in self.providers:
             raise KeyError
-        if name not in self.initialized_providers:
-            logger.info('Initializing provider %s', name)
-            provider = provider_registry[name](**self.provider_configs.get(name, {}))
-            provider.initialize()
-            self.initialized_providers[name] = provider
+        provider = self.initialized_providers.get(name)
+        if provider is not None:
+            return provider
 
-        return self.initialized_providers[name]
+        with self._lock:
+            init_lock = self._init_locks[name]
+        with init_lock:
+            # another thread may have initialized it while we were waiting
+            if name not in self.initialized_providers:
+                logger.info('Initializing provider %s', name)
+                provider = provider_registry[name](**self.provider_configs.get(name, {}))
+                provider.initialize()
+                self.initialized_providers[name] = provider
+
+            return self.initialized_providers[name]
 
     def __delitem__(self, name):
+        with self._lock:
+            init_lock = self._init_locks[name]
+        with init_lock:
+            self._delete_provider(name)
+
+    def _delete_provider(self, name):
         if name not in self.initialized_providers:
             raise KeyError(name)
 
