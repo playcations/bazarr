@@ -9,6 +9,7 @@ proposed upstream. All options ship with defaults that preserve legacy behavior;
 |---|---|
 | `source/` | Original request/research documents, unmodified (may contain errors — see research and feature plans). |
 | `research/findings-2026-09-24.md` | Verified source audit of the claims, upstream PR analysis, corrections. |
+| `research/live-baseline-2026-09-24.md` | Throughput and problems measured on the live instance. |
 | `features/fr2-shared-provider-discovery.md` | FR2 plan: one provider listing per media item. |
 | `features/fr1-subtitle-pack-reuse.md` | FR1 plan: reuse season packs across Wanted episodes. |
 | `features/fr3-parallel-wanted-scheduler.md` | FR3 plan: provider-lane parallel Wanted (first acceptable subtitle wins; upgrades find better ones). |
