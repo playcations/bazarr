@@ -74,16 +74,7 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
                                   f"has been reached during this search.")
                     continue
                 else:
-                    # resolve per-language hearing_impaired mode from profile
-                    lang_alpha2 = alpha2_from_alpha3(language.alpha3)
-                    hi_mode = "don't prefer"
-                    for item in profile['items']:
-                        if item['language'] == lang_alpha2 and item['forced'] == ("True" if language.forced else "False"):
-                            if item['hi'] == "True":
-                                hi_mode = "force HI"
-                            elif item['hi'] == HI_EXCLUDED:
-                                hi_mode = "force non-HI"
-                            break
+                    hi_mode = _get_hi_mode(profile, language)
 
                     try:
                         downloaded_subtitles = download_best_subtitles(videos={video},
@@ -163,6 +154,21 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
     subliminal.region.backend.sync()
 
     logging.debug(f'BAZARR Ended searching Subtitles for file: {path}')
+
+
+def _get_hi_mode(profile, language):
+    # resolve per-language hearing_impaired mode from profile
+    lang_alpha2 = alpha2_from_alpha3(language.alpha3)
+    for item in profile['items']:
+        # an HI requirement comes from an HI profile item, a regular one from a non-HI or HI-excluded item
+        if item['language'] == lang_alpha2 and item['forced'] == ("True" if language.forced else "False") and \
+                (item['hi'] == "True") == bool(language.hi):
+            if item['hi'] == "True":
+                return "force HI"
+            elif item['hi'] == HI_EXCLUDED:
+                return "force non-HI"
+            break
+    return "don't prefer"
 
 
 def _blacklist_unusable_subtitles(video, subtitles, media_type, language, failed_subtitle=None):
