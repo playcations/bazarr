@@ -20,6 +20,7 @@ from app.event_handler import event_stream
 from app.config import settings
 
 from ..download import generate_subtitles
+from subliminal_patch.core import search_results_cache
 
 
 def series_download_subtitles(no, job_id=None, job_sub_function=False):
@@ -231,9 +232,11 @@ def episode_download_specific_subtitles(sonarr_series_id, sonarr_episode_id, lan
         audio_language = None
 
     try:
-        result = list(generate_subtitles(episodePath, [(language, hi, forced)], audio_language, sceneName,
-                                         title, 'series', profile_id=get_profile_id(episode_id=sonarr_episode_id),
-                                         job_id=job_id))
+        # searching a specific language on demand asks the providers again
+        with search_results_cache.bypass():
+            result = list(generate_subtitles(episodePath, [(language, hi, forced)], audio_language, sceneName,
+                                             title, 'series', profile_id=get_profile_id(episode_id=sonarr_episode_id),
+                                             job_id=job_id))
         if isinstance(result, list) and len(result):
             result = result[0]
             store_subtitles(sonarr_episode_id)

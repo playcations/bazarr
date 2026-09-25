@@ -203,6 +203,26 @@ export const useRunTask = () => {
   });
 };
 
+export const useSystemCache = () =>
+  useQuery({
+    queryKey: [QueryKeys.System, QueryKeys.Cache],
+    queryFn: () => api.system.cache(),
+  });
+
+export const useClearCache = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: [QueryKeys.System, QueryKeys.Cache],
+    mutationFn: (scope: "search" | "all") => api.system.clearCache(scope),
+
+    onSuccess: () => {
+      void client.invalidateQueries({
+        queryKey: [QueryKeys.System, QueryKeys.Cache],
+      });
+    },
+  });
+};
+
 export const useSystemBackups = () =>
   useQuery({
     queryKey: [QueryKeys.System, "backups"],
