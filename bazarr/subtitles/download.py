@@ -95,6 +95,7 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
                                                                        fallback_allowed=fallback_allowed)
                     except Exception as e:
                         logging.exception(f'BAZARR Error downloading Subtitles for this file {path}: {str(e)}')
+                        subliminal.region.backend.sync()
                         return None
 
                 if downloaded_subtitles:
@@ -158,6 +159,8 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
 
         if not saved_any:
             logging.debug(f'BAZARR No Subtitles were found for this file: {path}')
+            # searches that found nothing are cached too
+            subliminal.region.backend.sync()
             return None
 
     subliminal.region.backend.sync()
