@@ -19,8 +19,10 @@ is added; everything below uses that region.
   episodes. Manual searches and "search this language" ask the providers and refresh the cache. "Clear search
   results" bumps a generation number in the keys (keys are sha1-mangled, so no prefix delete); old entries are
   removed by Cache Maintenance. Cache hits don't take a provider lane (FR3).
-- **Provider scopes stored in the same region**: Gestdown show lookups (24 h) and whole-season listings (1 h);
-  SubDL season-only/title-only searches (1 h); SubDL packs kept whole for pack reuse (4 days). `get_or_create` with
+- **Provider scopes stored in the same region**: Gestdown whole-season listings (and its per-episode fallback) and
+  SubDL season-only/title-only searches follow the same "Reuse Search Results For" duration (1 hour when it's 0, so
+  a run's episodes still share them); Gestdown show lookups (24 h) and SubDL packs kept whole for pack reuse (4 days)
+  aren't search results and keep their own durations. `get_or_create` with
   dogpile's per-key lock gives single-flight downloads. The earlier in-memory caches (`pack_cache.py`, Gestdown's and
   SubDL's private dicts) and the pack cache size/lifetime settings were removed.
 - **Thread safety**: `SZFileBackend` now locks around FileCache, whose write buffer was iterated by `sync()` while
