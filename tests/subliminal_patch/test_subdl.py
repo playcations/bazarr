@@ -14,8 +14,12 @@ def fresh_cache():
     """Season-only and title-only searches are kept in the subtitles cache: every test starts with an empty one."""
     from subliminal.cache import region
 
+    from subliminal_patch.core import search_results_cache
+
     region.configure("dogpile.cache.memory", replace_existing_backend=True)
+    search_results_cache.configure(24)
     yield
+    search_results_cache.configure(0)
 
 
 @pytest.fixture(scope="session")
@@ -810,5 +814,5 @@ def test_season_only_search_follows_the_search_results_duration(monkeypatch):
     finally:
         search_results_cache.configure(0)
 
-    # season-only and title-only fallback searches for each episode
-    assert expirations == [24 * 3600, 24 * 3600, _Provider.SEARCH_CACHE_TTL, _Provider.SEARCH_CACHE_TTL]
+    # season-only and title-only fallback searches of the first episode; not cached once reuse is disabled
+    assert expirations == [24 * 3600, 24 * 3600]
