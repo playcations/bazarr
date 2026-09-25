@@ -151,6 +151,15 @@ class ProviderLimits:
                 lane.busy_seconds += time.monotonic() - started
                 lane.wait_seconds += started - waiting_since
 
+    def average_seconds(self, provider):
+        """Average duration of this provider's operations so far, 0 when unknown."""
+        with self._lock:
+            lane = self._lanes.get(provider)
+        if lane is None:
+            return 0.0
+        with lane.condition:
+            return lane.busy_seconds / lane.operations if lane.operations else 0.0
+
     def stats(self):
         """Per provider: (operations, average seconds per operation, average seconds waiting for the lane)."""
         with self._lock:

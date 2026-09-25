@@ -161,7 +161,10 @@ def _still_missing(handler, item, searched_languages):
 
 
 def _reserve_provider(candidates):
-    """Claim the first candidate with free capacity, in the order of enabled providers. Waits until one is free."""
+    """Claim a candidate with free capacity, fastest first so an item that finds its subtitles on a fast provider
+    doesn't wait for slow ones. Unmeasured providers come first, then the order of enabled providers. Waits until one
+    is free."""
+    candidates = sorted(candidates, key=provider_limits.average_seconds)
     while True:
         for name in candidates:
             reservation = provider_limits.try_reserve(name)
