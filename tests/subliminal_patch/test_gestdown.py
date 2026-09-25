@@ -273,3 +273,16 @@ def test_show_missing_from_gestdown_is_looked_up_once(requests_mock):
         for number in (1, 2, 3):
             assert provider.list_subtitles(_episode(number), {Language.fromietf("en")}) == []
     assert lookup.call_count == 1
+
+
+def test_season_listing_follows_the_search_results_duration():
+    from subliminal_patch.core import search_results_cache
+    from subliminal_patch.providers import gestdown
+
+    try:
+        search_results_cache.configure(24)
+        assert gestdown._season_ttl() == 24 * 3600
+        search_results_cache.configure(0)
+        assert gestdown._season_ttl() == gestdown._SEASON_TTL
+    finally:
+        search_results_cache.configure(0)
