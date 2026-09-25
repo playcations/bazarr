@@ -71,6 +71,8 @@ class ProviderLimits:
         # a thread already holding a provider lane must not wait for a second slot of the same provider
         # (e.g. a provider downloading through its own list_subtitles code path)
         self._held = threading.local()
+        # notified whenever a reservation is released or the limits change
+        self._freed = threading.Condition()
 
     @property
     def enabled(self):
@@ -98,6 +100,7 @@ class ProviderLimits:
             self._overrides = parsed
             # new lanes are created lazily with the new limits; in-flight operations finish on the old ones
             self._lanes = {}
+        self._notify_freed()
         logger.debug("Provider limits %s (default %s, overrides %s)", "enabled" if enabled else "disabled",
                      self._default, parsed)
 
@@ -122,10 +125,36 @@ class ProviderLimits:
         lane = self._lane(provider)
         return lane if lane.try_reserve() else False
 
-    @staticmethod
-    def unreserve(reservation):
+    def unreserve(self, reservation):
         if isinstance(reservation, _Lane):
             reservation.unreserve()
+            self._notify_freed()
+
+    def reserve_any(self, providers):
+        """Claim the first of these providers with free capacity, waiting until one frees up.
+        Returns (provider, reservation)."""
+        with self._freed:
+            while True:
+                for provider in providers:
+                    reservation = self.try_reserve(provider)
+                    if reservation:
+                        return provider, reservation
+                # a lane only held back by its minimum interval is free again once the interval has passed
+                self._freed.wait(self._interval_wait(providers))
+
+    def _interval_wait(self, providers):
+        now = time.monotonic()
+        waits = []
+        for provider in providers:
+            lane = self._lane(provider)
+            with lane.condition:
+                if lane.reserved < lane.max_in_flight and lane.next_start > now:
+                    waits.append(lane.next_start - now)
+        return min(waits) if waits else None
+
+    def _notify_freed(self):
+        with self._freed:
+            self._freed.notify_all()
 
     @contextmanager
     def slot(self, provider):
