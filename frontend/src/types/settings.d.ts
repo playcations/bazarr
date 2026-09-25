@@ -57,6 +57,10 @@ declare namespace Settings {
     provider_limits: string[];
     pack_reuse: boolean;
     forced_only_search_days: number;
+    forced_only_when_available: boolean;
+    forced_evidence_use_tmdb: boolean;
+    forced_evidence_grace_days: number;
+    tmdb_api_key: string;
     minimum_score: number;
     minimum_score_movie: number;
     movie_default_enabled: boolean;

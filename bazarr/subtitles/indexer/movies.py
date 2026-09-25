@@ -20,6 +20,7 @@ from app.event_handler import event_stream
 from subtitles.indexer.utils import guess_external_subtitles, get_external_subtitles_path
 from subtitles.pool import get_language_equals
 from app.jobs_queue import jobs_queue
+from subtitles.indexer import forced_evidence
 
 gc.enable()
 
@@ -251,6 +252,9 @@ def list_missing_subtitles_movies(no=None, *args, **kwargs):  # job_id might be 
     matches_audio = lambda language: any(x['code2'] == language['language'] for x in get_audio_profile_languages(
                                 movie_subtitles.audio_language))
 
+    # forced subtitles aren't wanted for movies that don't need them (see forced_evidence)
+    forced_needs = forced_evidence.forced_needs('movie', {x.radarrId for x in movies_subtitles})
+
     for movie_subtitles in movies_subtitles:
         missing_subtitles_text = '[]'
         if movie_subtitles.profileId:
@@ -265,6 +269,9 @@ def list_missing_subtitles_movies(no=None, *args, **kwargs):  # job_id might be 
                     if language['audio_only_include'] == "True":
                         if not matches_audio(language):
                             continue
+                    if language['forced'] == "True" and forced_needs.not_needed(movie_subtitles.radarrId,
+                                                                                language['language']):
+                        continue
                     desired_subtitles_list.append({'language': language['language'],
                                                    'forced': str(language['forced']),
                                                    'hi': str(language['hi'])})
