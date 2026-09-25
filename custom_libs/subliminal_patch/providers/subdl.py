@@ -191,7 +191,6 @@ class SubdlProvider(Provider):
     """Subdl Provider"""
     server_hostname = 'api.subdl.com'
     SEARCH_CACHE_TTL = 3600
-    SEARCH_CACHE_MAX_ENTRIES = 2000
     # packs kept whole (pack reuse) stay in the subtitles cache for the other episodes of the season
     PACK_CACHE_TTL = 4 * 24 * 3600
 
@@ -218,9 +217,6 @@ class SubdlProvider(Provider):
         # Bazarr shares one provider instance across threads, so guard the set.
         self._ai_notices_logged = set()
         self._ai_notices_lock = Lock()
-        # season-only and title-only search results, shared by the episodes of a season/series
-        self._search_cache = {}
-        self._search_cache_lock = Lock()
         # Set when the server says the monthly translation quota is exhausted.
         # Until it passes, no AI candidates are offered: the server-side status
         # is cached per worker over there, so without this a wanted-list scan
@@ -318,20 +314,10 @@ class SubdlProvider(Provider):
 
     def _cached_search(self, params, description):
         """_search for searches whose results are the same for every episode of a season or series (season-only
-        and title-only fallbacks): the other episodes reuse them for SEARCH_CACHE_TTL seconds."""
-        key = tuple(sorted((k, str(v)) for k, v in params.items()))
-        now = time.monotonic()
-        with self._search_cache_lock:
-            entry = self._search_cache.get(key)
-            if entry and entry[2] > now:
-                logger.debug(f'subdl: {description} search served from cache')
-                return entry[0], entry[1]
-        items, payload = self._search(params, description)
-        with self._search_cache_lock:
-            if len(self._search_cache) > self.SEARCH_CACHE_MAX_ENTRIES:
-                self._search_cache = {k: v for k, v in self._search_cache.items() if v[2] > now}
-            self._search_cache[key] = (items, payload, now + self.SEARCH_CACHE_TTL)
-        return items, payload
+        and title-only fallbacks): kept in the subtitles cache for SEARCH_CACHE_TTL seconds."""
+        key = 'subdl.search.' + '&'.join(f'{k}={v}' for k, v in sorted(params.items()))
+        return region.get_or_create(key, lambda: self._search(params, description),
+                                    expiration_time=self.SEARCH_CACHE_TTL)
 
     def _search(self, params, description, paginate=False):
         """Run one search and return (items, first_payload).

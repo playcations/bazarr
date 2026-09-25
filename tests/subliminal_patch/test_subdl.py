@@ -8,6 +8,16 @@ from subliminal_patch.core import Episode
 from subzero.language import Language
 
 
+
+@pytest.fixture(autouse=True)
+def fresh_cache():
+    """Season-only and title-only searches are kept in the subtitles cache: every test starts with an empty one."""
+    from subliminal.cache import region
+
+    region.configure("dogpile.cache.memory", replace_existing_backend=True)
+    yield
+
+
 @pytest.fixture(scope="session")
 def provider():
     with SubdlProvider(os.environ["SUBDL_TOKEN"]) as provider:
