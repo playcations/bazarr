@@ -129,3 +129,19 @@ def test_file_backend_is_safe_with_concurrent_writes(tmp_path):
 
     assert errors == []
     assert backend.get("key-3199") == 3199
+
+
+def test_file_backend_flushes_buffered_writes_by_itself(tmp_path, monkeypatch):
+    import os
+
+    from subzero.cache_backends import file as file_backend
+
+    monkeypatch.setattr(file_backend, "FLUSH_EVERY_ENTRIES", 5)
+    backend = file_backend.SZFileBackend({"appname": "flush_cache", "app_cache_dir": str(tmp_path)})
+    cache_dir = backend._cache.cache_dir
+    for i in range(4):
+        backend.set(f"key-{i}", i)
+    assert len(os.listdir(cache_dir)) == 0
+
+    backend.set("key-4", 4)
+    assert len(os.listdir(cache_dir)) == 5
