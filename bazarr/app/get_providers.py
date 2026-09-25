@@ -24,6 +24,7 @@ from subliminal.exceptions import DownloadLimitExceeded, ServiceUnavailable, Aut
 from subliminal import region as subliminal_cache_region
 from subliminal_patch.extensions import provider_registry
 from subliminal_patch.provider_limits import provider_limits
+from subliminal_patch.pack_cache import pack_cache
 
 from app.get_args import args
 from app.config import settings
@@ -359,6 +360,7 @@ def get_providers_auth():
             'api_key': settings.subdl.api_key,
             'ai_translate': settings.subdl.ai_translate,
             'include_ai_translated': settings.subdl.include_ai_translated,
+            'pack_reuse': settings.general.pack_reuse,
         },
         'turkcealtyaziorg': {
             'cookies': settings.turkcealtyaziorg.cookies,
@@ -677,6 +679,12 @@ def apply_provider_limits():
                               overrides=get_array_from_setting(settings.general.provider_limits))
 
 
+def apply_pack_cache():
+    pack_cache.configure(enabled=settings.general.pack_reuse,
+                         max_megabytes=settings.general.pack_cache_max_mb,
+                         ttl_minutes=settings.general.pack_cache_ttl_minutes)
+
+
 def get_array_from_setting(value):
     if isinstance(value, str):
         return [x for x in value.split(',') if x.strip()]
@@ -688,3 +696,4 @@ if not isinstance(tp, dict):
     raise ValueError('tp should be a dict')
 
 apply_provider_limits()
+apply_pack_cache()
