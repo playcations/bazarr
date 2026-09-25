@@ -60,6 +60,17 @@ HI_REGEX_WITH_PARENTHESIS = re.compile(r'[*¶♫♪].{3,}[*¶♫♪]|[\[\(\{].{3
 HI_REGEX_PARENTHESIS_EXCLUDED_LANGUAGES = ['ara', 'fas']
 
 
+def _content_is_hi(subtitle):
+    """Same detection save_subtitles uses to relabel a regular subtitle as hearing-impaired."""
+    try:
+        return bool(subtitle.text and subtitle.format == 'srt' and
+                    parse_for_hi_regex(subtitle_text=subtitle.text,
+                                       alpha3_language=getattr(subtitle.language, 'alpha3', None)))
+    except Exception:
+        logger.debug("%r: Unable to check subtitle content for hearing-impaired cues", subtitle)
+        return False
+
+
 def parse_for_hi_regex(subtitle_text, alpha3_language):
     if alpha3_language in HI_REGEX_PARENTHESIS_EXCLUDED_LANGUAGES:
         return bool(re.search(HI_REGEX_WITHOUT_PARENTHESIS, subtitle_text))
@@ -559,7 +570,7 @@ class SZProviderPool(ProviderPool):
         return True
 
     def download_best_subtitles(self, subtitles, video, languages, min_score=0, hearing_impaired=False, only_one=False,
-                                use_original_format=False, fallback_allowed=False):
+                                use_original_format=False, fallback_allowed=False, reject_detected_hi=False):
         """Download the best matching subtitles.
 
         patch:
@@ -577,6 +588,8 @@ class SZProviderPool(ProviderPool):
         :param bool hearing_impaired: hearing impaired preference.
         :param bool only_one: download only one subtitle, not one per language.
         :param bool use_original_format: preserve original subtitles format
+        :param bool reject_detected_hi: skip subtitles whose content turns out to be hearing-impaired. Saving them would
+            relabel them as HI, so they would never satisfy a requirement excluding HI.
         :return: downloaded subtitles.
         :rtype: list of :class:`~subliminal.subtitle.Subtitle`
 
@@ -662,6 +675,9 @@ class SZProviderPool(ProviderPool):
             logger.debug("%r: Trying to download subtitle with matches %s, score: %s; release(s): %s", subtitle,
                          matches, score, subtitle.release_info)
             if self.download_subtitle(subtitle):
+                if reject_detected_hi and _content_is_hi(subtitle):
+                    logger.debug("%r: Skipping subtitle because its content is hearing-impaired", subtitle)
+                    continue
                 subtitle.score = score
                 downloaded_subtitles.append(subtitle)
 
