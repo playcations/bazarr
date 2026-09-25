@@ -2,6 +2,7 @@
 # fmt: off
 
 import logging
+import threading
 import time
 
 from inspect import getfullargspec
@@ -28,6 +29,8 @@ def _init_pool(media_type, profile_id=None, providers=None):
 
 
 _pools = {}
+# jobs run in parallel threads and must not create the same pool twice
+_pools_lock = threading.RLock()
 
 
 def _get_pool(media_type, profile_id=None):
@@ -40,6 +43,11 @@ def _get_pool(media_type, profile_id=None):
 
 
 def _update_pool(media_type, profile_id=None):
+    with _pools_lock:
+        return _update_pool_locked(media_type, profile_id)
+
+
+def _update_pool_locked(media_type, profile_id=None):
     pool_key = f'{media_type}_{profile_id or ""}'
     logging.debug("BAZARR updating pool: %s", pool_key)
 

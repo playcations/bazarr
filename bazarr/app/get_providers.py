@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import os
+import ast
 import datetime
 import logging
 import subliminal_patch
@@ -10,6 +11,8 @@ import socket
 import requests
 import traceback
 import re
+import tempfile
+import threading
 
 from zoneinfo import ZoneInfo
 from requests import ConnectionError
@@ -30,6 +33,9 @@ from sonarr.blacklist import blacklist_log
 from utilities.analytics import event_tracker
 
 _TRACEBACK_RE = re.compile(r'File "(.*?providers[\\/].*?)", line (\d+)')
+
+# throttle state is shared by jobs and provider searches running in different threads
+_throttle_lock = threading.RLock()
 
 
 def time_until_midnight(timezone: ZoneInfo) -> datetime.timedelta:
@@ -200,19 +206,20 @@ def get_providers():
     existing_providers = provider_registry.names()
     providers = [x for x in settings.general.enabled_providers if x in existing_providers]
     for provider in providers:
-        reason, until, throttle_desc = tp.get(provider, (None, None, None))
-        providers_list.append(provider)
+        with _throttle_lock:
+            reason, until, throttle_desc = tp.get(provider, (None, None, None))
+            providers_list.append(provider)
 
-        if reason:
-            now = datetime.datetime.now()
-            if now < until:
-                logging.debug("Not using %s until %s, because of: %s", provider,
-                              until.strftime("%y/%m/%d %H:%M"), reason)
-                providers_list.remove(provider)
-            else:
-                logging.info("Using %s again after %s, (disabled because: %s)", provider, throttle_desc, reason)
-                tp.pop(provider, None)
-                set_throttled_providers(str(tp))
+            if reason:
+                now = datetime.datetime.now()
+                if now < until:
+                    logging.debug("Not using %s until %s, because of: %s", provider,
+                                  until.strftime("%y/%m/%d %H:%M"), reason)
+                    providers_list.remove(provider)
+                else:
+                    logging.info("Using %s again after %s, (disabled because: %s)", provider, throttle_desc, reason)
+                    tp.pop(provider, None)
+                    set_throttled_providers(str(tp))
         # if forced only is enabled: # fixme: Prepared for forced only implementation to remove providers with don't support forced only subtitles
         #     for provider in providers_list:
         #         if provider in PROVIDERS_FORCED_OFF:
@@ -436,8 +443,9 @@ def provider_throttle(name, exception, ids=None, language=None):
                 except (IOError, OSError):
                     logging.debug("Couldn't remove cache file: %s", os.path.basename(fn))
         else:
-            tp[name] = (cls_name, throttle_until, throttle_description)
-            set_throttled_providers(str(tp))
+            with _throttle_lock:
+                tp[name] = (cls_name, throttle_until, throttle_description)
+                set_throttled_providers(str(tp))
 
             trac_info = _get_traceback_info(exception)
 
@@ -470,6 +478,17 @@ def _get_traceback_info(exc: Exception):
 
 
 def throttled_count(name):
+    with _throttle_lock:
+        count = _increment_throttle_count(name)
+        if count is None:
+            return True
+    logging.info("Provider %s throttle count %s of 5, waiting 5sec and trying again", name, count)
+    time.sleep(5)
+    return False
+
+
+def _increment_throttle_count(name):
+    """Record one failure for a provider. Returns None once the throttle must be applied, else the current count."""
     global throttle_count
     if name in list(throttle_count.keys()):
         if 'count' in list(throttle_count[name].keys()):
@@ -492,13 +511,18 @@ def throttled_count(name):
         # spent on the throttle being applied, so the next one starts from a clean count.
         # Searches run in parallel and can report the same provider, hence the tolerant pop
         throttle_count.pop(name, None)
-        return True
-    logging.info("Provider %s throttle count %s of 5, waiting 5sec and trying again", name, count)
-    time.sleep(5)
-    return False
+        return None
+    return count
 
 
 def update_throttled_provider():
+    with _throttle_lock:
+        _update_throttled_provider()
+
+    event_stream(type='badges')
+
+
+def _update_throttled_provider():
     existing_providers = provider_registry.names()
     providers_list = [x for x in settings.general.enabled_providers if x in existing_providers]
 
@@ -527,8 +551,6 @@ def update_throttled_provider():
                     tp.pop(provider, None)
                     set_throttled_providers(str(tp))
 
-    event_stream(type='badges')
-
 
 def list_throttled_providers():
     update_throttled_provider()
@@ -542,14 +564,15 @@ def list_throttled_providers():
 
 
 def reset_throttled_providers(only_auth_or_conf_error=False):
-    for provider in list(tp):
-        if only_auth_or_conf_error and tp[provider][0] not in ['AuthenticationError', 'ConfigurationError',
-                                                               'PaymentRequired']:
-            continue
-        tp.pop(provider, None)
-        # the reset hands back a clean slate, including strikes not yet spent on a throttle
-        throttle_count.pop(provider, None)
-    set_throttled_providers(str(tp))
+    with _throttle_lock:
+        for provider in list(tp):
+            if only_auth_or_conf_error and tp[provider][0] not in ['AuthenticationError', 'ConfigurationError',
+                                                                   'PaymentRequired']:
+                continue
+            tp.pop(provider, None)
+            # the reset hands back a clean slate, including strikes not yet spent on a throttle
+            throttle_count.pop(provider, None)
+        set_throttled_providers(str(tp))
     update_throttled_provider()
     if only_auth_or_conf_error:
         logging.info('BAZARR throttled providers have been reset (only AuthenticationError, ConfigurationError and '
@@ -564,7 +587,7 @@ def get_throttled_providers():
         if os.path.exists(os.path.join(args.config_dir, 'config', 'throttled_providers.dat')):
             with open(os.path.normpath(os.path.join(args.config_dir, 'config', 'throttled_providers.dat')), 'r') as \
                     handle:
-                providers = eval(handle.read())
+                providers = _parse_throttled_providers(handle.read())
     except Exception:
         # set empty content in throttled_providers.dat
         logging.error("Invalid content in throttled_providers.dat. Resetting")
@@ -572,9 +595,39 @@ def get_throttled_providers():
     return providers
 
 
+def _parse_throttled_providers(data):
+    """Parse the repr of the throttled providers dict without eval(): only literals and datetime.datetime(...) calls
+    with literal arguments are accepted."""
+    def convert(node):
+        if isinstance(node, ast.Call) and not node.keywords and ast.unparse(node.func) in ('datetime.datetime',
+                                                                                           'datetime'):
+            return datetime.datetime(*[ast.literal_eval(arg) for arg in node.args])
+        if isinstance(node, ast.Dict):
+            return {convert(key): convert(value) for key, value in zip(node.keys, node.values)}
+        if isinstance(node, ast.Tuple):
+            return tuple(convert(element) for element in node.elts)
+        return ast.literal_eval(node)
+
+    return convert(ast.parse(data.strip() or '{}', mode='eval').body)
+
+
 def set_throttled_providers(data):
-    with open(os.path.normpath(os.path.join(args.config_dir, 'config', 'throttled_providers.dat')), 'w+') as handle:
-        handle.write(data)
+    path = os.path.normpath(os.path.join(args.config_dir, 'config', 'throttled_providers.dat'))
+    # write to a temporary file first so a crash or a concurrent reader never sees a partially written file
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path), prefix='.throttled_providers.', suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w') as handle:
+            handle.write(data)
+        if os.path.exists(path):
+            # keep the permissions of the existing file instead of mkstemp's private ones
+            os.chmod(tmp_path, os.stat(path).st_mode & 0o7777)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 tp = get_throttled_providers()

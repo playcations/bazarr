@@ -62,15 +62,22 @@ def _wanted_movie(movie, providers_list, job_id=None):
             send_notifications_movie(movie.radarrId, result.message)
             event_stream(type='movie-wanted', action='delete', payload=movie.radarrId)
 
-    if not found_any and providers_list:
+    if not found_any and providers_list and languages_to_stamp:
+        # a provider that got throttled during this search didn't really search, so it isn't a definitive miss
+        available_providers = get_providers() or []
+        if any(provider not in available_providers for provider in providers_list):
+            logging.debug(f"BAZARR Not updating adaptive search attempts for {movie.path} because some providers "
+                          f"got throttled during the search")
+            return
+
+        # chain the updates so every searched language keeps its own timestamps
+        updated = movie.failedAttempts
         for language in languages_to_stamp:
-            updated = updateFailedAttempts(
-                desired_language=language,
-                attempt_string=movie.failedAttempts)
-            database.execute(
-                update(TableMovies)
-                .values(failedAttempts=updated)
-                .where(TableMovies.radarrId == movie.radarrId))
+            updated = updateFailedAttempts(desired_language=language, attempt_string=updated)
+        database.execute(
+            update(TableMovies)
+            .values(failedAttempts=updated)
+            .where(TableMovies.radarrId == movie.radarrId))
 
 
 def wanted_download_subtitles_movie(radarr_id, job_id=None):

@@ -64,16 +64,23 @@ def _wanted_episode(episode, providers_list, job_id=None):
             event_stream(type='series', action='update', payload=episode.sonarrSeriesId)
             event_stream(type='episode-wanted', action='delete', payload=episode.sonarrEpisodeId)
 
-    if not found_any and providers_list:
+    if not found_any and providers_list and languages_to_stamp:
+        # a provider that got throttled during this search didn't really search, so it isn't a definitive miss
+        available_providers = get_providers() or []
+        if any(provider not in available_providers for provider in providers_list):
+            logging.debug(f"BAZARR Not updating adaptive search attempts for {episode.path} because some providers "
+                          f"got throttled during the search")
+            return
+
+        # chain the updates so every searched language keeps its own timestamps
+        updated = episode.failedAttempts
         for language in languages_to_stamp:
-            updated = updateFailedAttempts(
-                desired_language=language,
-                attempt_string=episode.failedAttempts)
-            database.execute(
-                update(TableEpisodes)
-                .values(failedAttempts=updated)
-                .where(TableEpisodes.sonarrEpisodeId ==
-                       episode.sonarrEpisodeId))
+            updated = updateFailedAttempts(desired_language=language, attempt_string=updated)
+        database.execute(
+            update(TableEpisodes)
+            .values(failedAttempts=updated)
+            .where(TableEpisodes.sonarrEpisodeId ==
+                   episode.sonarrEpisodeId))
 
 
 def wanted_download_subtitles(sonarr_episode_id, job_id=None):
