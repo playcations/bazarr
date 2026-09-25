@@ -163,8 +163,6 @@ class SubdlSubtitle(Subtitle):
 class SubdlProvider(Provider):
     """Subdl Provider"""
     server_hostname = 'api.subdl.com'
-    # used when search results reuse is disabled, so the episodes of a season still share a run's searches
-    SEARCH_CACHE_TTL = 3600
 
     languages = {Language(*lang) for lang in list(language_converters['subdl'].to_subdl.keys())}
     languages.update(set(Language.rebuild(lang, forced=True) for lang in languages))
@@ -284,10 +282,12 @@ class SubdlProvider(Provider):
     def _cached_search(self, params, description):
         """_search for searches whose results are the same for every episode of a season or series (season-only
         and title-only fallbacks): kept in the subtitles cache as long as search results are reused (see
-        search_results_cache), or SEARCH_CACHE_TTL seconds when that's disabled."""
+        search_results_cache); not cached when that's disabled."""
+        if not search_results_cache.ttl:
+            return self._search(params, description)
         key = 'subdl.search.' + '&'.join(f'{k}={v}' for k, v in sorted(params.items()))
         return region.get_or_create(key, lambda: self._search(params, description),
-                                    expiration_time=search_results_cache.ttl or self.SEARCH_CACHE_TTL)
+                                    expiration_time=search_results_cache.ttl)
 
     def _search(self, params, description, paginate=False):
         """Run one search and return (items, first_payload).
