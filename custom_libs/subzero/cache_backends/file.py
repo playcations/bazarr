@@ -1,5 +1,6 @@
 # coding=utf-8
 from __future__ import absolute_import
+import atexit
 import threading
 import time
 
@@ -22,6 +23,8 @@ class SZFileBackend(CacheBackend):
         # (sync() iterates it while other threads add to it)
         self._lock = threading.RLock()
         self._last_sync = time.monotonic()
+        # don't lose the last buffered writes when Bazarr stops
+        atexit.register(self.sync)
 
     def get(self, key):
         with self._lock:
