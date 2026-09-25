@@ -11,8 +11,12 @@ def fresh_cache():
     """Show lookups and season listings are kept in the subtitles cache: every test starts with an empty one."""
     from subliminal.cache import region
 
+    from subliminal_patch.core import search_results_cache
+
     region.configure("dogpile.cache.memory", replace_existing_backend=True)
+    search_results_cache.configure(24)
     yield
+    search_results_cache.configure(0)
 
 
 def test_language_list_is_convertible():
@@ -275,14 +279,15 @@ def test_show_missing_from_gestdown_is_looked_up_once(requests_mock):
     assert lookup.call_count == 1
 
 
-def test_season_listing_follows_the_search_results_duration():
+def test_season_listing_follows_the_search_results_duration(requests_mock):
     from subliminal_patch.core import search_results_cache
-    from subliminal_patch.providers import gestdown
 
-    try:
-        search_results_cache.configure(24)
-        assert gestdown._season_ttl() == 24 * 3600
+    _mock_show(requests_mock)
+    season = requests_mock.get(f"{_BASE_URL}/shows/{_SHOW}/1/English", json={"episodes": [
+        {"season": 1, "number": n, "subtitles": [_sub(f"e{n}")]} for n in (1, 2)]})
+    with GestdownProvider() as provider:
+        # not reused: every episode asks again
         search_results_cache.configure(0)
-        assert gestdown._season_ttl() == gestdown._SEASON_TTL
-    finally:
-        search_results_cache.configure(0)
+        for number in (1, 2):
+            provider.list_subtitles(_episode(number), {Language.fromietf("en")})
+        assert season.call_count == 2
