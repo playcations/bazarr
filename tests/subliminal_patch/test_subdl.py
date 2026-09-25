@@ -783,3 +783,32 @@ def test_season_only_search_is_shared_by_the_episodes_of_a_season(monkeypatch):
 
     assert calls.count("season-only") == 1
     assert calls.count("episode") == 3
+
+
+def test_season_only_search_follows_the_search_results_duration(monkeypatch):
+    from subliminal.video import Episode as _Episode
+    from subliminal_patch.core import search_results_cache
+    from subliminal_patch.providers import subdl as subdl_module
+    from subliminal_patch.providers.subdl import SubdlProvider as _Provider
+    from subzero.language import Language as _Language
+
+    expirations = []
+    real_get_or_create = subdl_module.region.get_or_create
+
+    def spy(key, creator, expiration_time=None, **kwargs):
+        expirations.append(expiration_time)
+        return real_get_or_create(key, creator, expiration_time=expiration_time, **kwargs)
+
+    monkeypatch.setattr(subdl_module.region, "get_or_create", spy)
+    provider = _Provider(api_key="key")
+    monkeypatch.setattr(provider, "_search", lambda params, description, paginate=False: ([], {}))
+    try:
+        search_results_cache.configure(24)
+        provider.query({_Language("eng")}, _Episode("/tv/Show.S01E01.mkv", "Show", 1, 1))
+        search_results_cache.configure(0)
+        provider.query({_Language("eng")}, _Episode("/tv/Show.S02E01.mkv", "Show", 2, 1))
+    finally:
+        search_results_cache.configure(0)
+
+    # season-only and title-only fallback searches for each episode
+    assert expirations == [24 * 3600, 24 * 3600, _Provider.SEARCH_CACHE_TTL, _Provider.SEARCH_CACHE_TTL]
