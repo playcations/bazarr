@@ -2,6 +2,7 @@
 import logging
 import os
 import time
+import threading
 import datetime
 import json
 
@@ -182,6 +183,7 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
         self.username = username
         self.password = password
         self.video = None
+        self._login_lock = threading.RLock()
         self.use_hash = use_hash
         self.include_ai_translated = include_ai_translated
         self.include_machine_translated = include_machine_translated
@@ -212,6 +214,11 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
         return f'https://{self.server_hostname}/api/v1/'
 
     def login(self, is_retry=False):
+        # concurrent searches share this instance: don't log in several times at once
+        with self._login_lock:
+            self._login(is_retry=is_retry)
+
+    def _login(self, is_retry=False):
         r = self.checked(
             lambda: self.session.post(self.server_url() + 'login',
                                       json={"username": self.username, "password": self.password},
@@ -250,7 +257,9 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
         return int(sanitized_id)
 
     @region.cache_on_arguments(expiration_time=SHOW_EXPIRATION_TIME)
-    def search_titles(self, title):
+    def search_titles(self, title, year=None, is_episode=False):
+        # the provider instance is shared by concurrent searches: everything about the video is passed in
+        video_year = year
         title_id = None
 
         parameters = {'query': title.lower()}
@@ -276,14 +285,14 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
                 year = None
 
             if 'title' in result['attributes']:
-                if isinstance(self.video, Episode):
+                if is_episode:
                     if fix_tv_naming(title).lower() == result['attributes']['title'].lower() and \
-                            (not self.video.year or self.video.year == year):
+                            (not video_year or video_year == year):
                         title_id = result['id']
                         break
                 else:
                     if fix_movie_naming(title).lower() == result['attributes']['title'].lower() and \
-                            (not self.video.year or self.video.year == year):
+                            (not video_year or video_year == year):
                         title_id = result['id']
                         break
             else:
@@ -301,26 +310,25 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
         return attributes['foreign_parts_only'] and not attributes['hearing_impaired']
 
     def query(self, languages, video):
-        self.video = video
         if self.use_hash:
-            file_hash = self.video.hashes.get('opensubtitlescom')
+            file_hash = video.hashes.get('opensubtitlescom')
         else:
             file_hash = None
         logger.debug(f'Searching using this hash: {file_hash}')
 
-        imdb_id = self.sanitize_external_ids(self.video.imdb_id) if self.video.imdb_id else None
+        imdb_id = self.sanitize_external_ids(video.imdb_id) if video.imdb_id else None
         logger.debug(f'Searching using this IMDB ID: {imdb_id}')
 
         title_id = None
-        if ((isinstance(self.video, Episode) and not self.video.series_imdb_id) or
-                (isinstance(self.video, Movie) and not imdb_id)):
-            if isinstance(self.video, Episode):
-                title = self.video.series
+        if ((isinstance(video, Episode) and not video.series_imdb_id) or
+                (isinstance(video, Movie) and not imdb_id)):
+            if isinstance(video, Episode):
+                title = video.series
             else:
-                title = self.video.title
+                title = video.title
             logger.debug(f'Searching for this title: {title}')
 
-            title_id = self.search_titles(title)
+            title_id = self.search_titles(title, year=video.year, is_episode=isinstance(video, Episode))
             logger.debug(f'Found this title ID: {title_id}')
         else:
             logger.debug(f"No need to search for a title ID. We'll use the IMDB ID instead.")
@@ -339,18 +347,18 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
         if imdb_id:
             params.append(('imdb_id', imdb_id))
 
-        if isinstance(self.video, Episode):
-            if not imdb_id and not title_id and not self.video.series_imdb_id:
+        if isinstance(video, Episode):
+            if not imdb_id and not title_id and not video.series_imdb_id:
                 logger.debug("We don't have any ID to search for, returning empty list.")
                 return []
 
-            if self.video.episode:
-                params.append(('episode_number', self.video.episode))
-            if self.video.season:
-                params.append(('season_number', self.video.season))
+            if video.episode:
+                params.append(('episode_number', video.episode))
+            if video.season:
+                params.append(('season_number', video.season))
 
-            if self.video.series_imdb_id:
-                params.append(('parent_imdb_id', self.sanitize_external_ids(self.video.series_imdb_id)))
+            if video.series_imdb_id:
+                params.append(('parent_imdb_id', self.sanitize_external_ids(video.series_imdb_id)))
             elif title_id:
                 params.append(('parent_feature_id', title_id))
         else:
@@ -436,9 +444,9 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
                 try:
                     # compare imdb ids to be able to use this matching status to override subtitle match guess
                     imdb_match = (item['attributes']['feature_details']['parent_imdb_id'] == self.sanitize_external_ids(
-                        self.video.series_imdb_id)) \
+                        video.series_imdb_id)) \
                                  or (item['attributes']['feature_details']['imdb_id'] == self.sanitize_external_ids(
-                        self.video.imdb_id))
+                        video.imdb_id))
                 except Exception as e:
                     logger.debug(f"Error while comparing imdb ids: {e}")
                     imdb_match = False
@@ -459,7 +467,7 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
                         hash_matched=moviehash_match,
                         imdb_match=imdb_match
                     )
-                    subtitle.get_matches(self.video)
+                    subtitle.get_matches(video)
                     subtitles.append(subtitle)
 
         return subtitles
