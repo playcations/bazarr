@@ -96,10 +96,10 @@ const SettingsSubtitlesSearchView: FunctionComponent = () => {
         ></Check>
         <Message>
           Forced subtitles only exist for titles with foreign-language parts.
-          Series and movies without any forced subtitle stop being wanted for
-          forced subtitles: those TMDB lists with a single spoken language, or
-          those already searched without finding any. They are wanted again as
-          soon as a forced subtitle is found for them.
+          Movies and episodes that don't need them stop being wanted for forced
+          subtitles: titles TMDB lists with a single spoken language, and
+          episodes already searched without finding any unless the series needs
+          them throughout.
         </Message>
         <CollapseBox settingKey="settings-general-forced_only_when_available">
           <Check
@@ -119,6 +119,19 @@ const SettingsSubtitlesSearchView: FunctionComponent = () => {
           <Message>
             Without TMDB information, how long after forced subtitles were first
             searched for a title before it stops wanting them.
+          </Message>
+          <Number
+            label="Share Of Episodes For A Whole Series (%)"
+            settingKey="settings-general-forced_series_ratio"
+            min={0}
+            max={100}
+          ></Number>
+          <Message>
+            Each episode is searched once for forced subtitles. Episodes where
+            none were found keep wanting them only if at least this share of the
+            checked episodes of the series have forced subtitles (like Breaking
+            Bad), otherwise only episodes that have them keep them (like a
+            series with a single episode in another language).
           </Message>
           <Password
             label="TMDB API Key (Optional)"

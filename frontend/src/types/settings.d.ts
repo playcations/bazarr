@@ -52,6 +52,7 @@ declare namespace Settings {
     forced_only_when_available: boolean;
     forced_evidence_use_tmdb: boolean;
     forced_evidence_grace_days: number;
+    forced_series_ratio: number;
     tmdb_api_key: string;
     minimum_score: number;
     minimum_score_movie: number;

@@ -142,6 +142,7 @@ validators = [
     Validator('general.forced_only_when_available', must_exist=True, default=False, is_type_of=bool),
     Validator('general.forced_evidence_use_tmdb', must_exist=True, default=True, is_type_of=bool),
     Validator('general.forced_evidence_grace_days', must_exist=True, default=7, is_type_of=int, gte=0, lte=365),
+    Validator('general.forced_series_ratio', must_exist=True, default=25, is_type_of=int, gte=0, lte=100),
     Validator('general.tmdb_api_key', must_exist=True, default='', is_type_of=str, cast=str),
     Validator('general.enabled_providers', must_exist=True, default=[], is_type_of=list),
     Validator('general.enabled_integrations', must_exist=True, default=[], is_type_of=list),
@@ -759,7 +760,7 @@ def save_settings(settings_items):
 
         if key in ['settings-general-language_equals', 'settings-general-forced_only_when_available',
                    'settings-general-forced_evidence_use_tmdb', 'settings-general-forced_evidence_grace_days',
-                   'settings-general-tmdb_api_key']:
+                   'settings-general-forced_series_ratio', 'settings-general-tmdb_api_key']:
             # recompute missing subtitles
             language_equals_changed = True
 
