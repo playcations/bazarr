@@ -30,7 +30,7 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `fix/hi-mode-profile-lookup` | HI mode taken from the wrong profile item when a profile has regular + HI for a language | development | done, tested | yes, small |
 | `fix/exclude-hi-content-detection` | subtitles with HI content downloaded for HI-excluded requirements, relabeled HI on save and re-downloaded every run | development | done, tested | yes, small |
 | `feature/shared-provider-discovery` | FR2 | `fix/hi-mode-profile-lookup` + `fix/exclude-hi-content-detection` | done, tested (needs live validation) | yes, after the HI fix |
-| `feature/subtitle-pack-reuse` | FR1 (phase B stacked on FR2) | — | planned | yes, after FR2 |
+| `feature/subtitle-pack-reuse` | FR1 | FR3 | done, tested, live tested | yes, after FR2/FR3 |
 | `feature/parallel-wanted-scheduler` | FR3 | FR2 + both fix branches | done, tested, live A/B running | yes, after Discord discussion |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
@@ -46,7 +46,7 @@ pretty-quick and stylelint.
 | Feature | Keys | UI |
 |---|---|---|
 | FR2 | `general.shared_provider_discovery` | Subtitles → Search |
-| FR1 | `general.pack_cache_enabled`, `general.pack_cache_max_mb`, `general.pack_cache_ttl_minutes`, `general.pack_reuse_across_episodes` | Subtitles → Search ("Subtitle packs") |
+| FR1 | `general.pack_reuse`, `general.pack_cache_max_mb`, `general.pack_cache_ttl_minutes` | Subtitles → Search ("Subtitle packs") |
 | FR3 | `general.wanted_parallel_enabled`, `general.wanted_max_active_items`, `general.provider_default_max_in_flight`, `general.provider_limits`, `general.local_io_max_in_flight`, (`general.persistence_batching`) | Subtitles → Search ("Wanted performance"), Providers → Advanced |
 
 Per setting the work is: `Validator` in `bazarr/app/config.py`; type in `frontend/src/types/settings.d.ts`; component

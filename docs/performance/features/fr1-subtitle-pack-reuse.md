@@ -1,8 +1,42 @@
 # FR1 — Subtitle pack reuse across Wanted episodes
 
 Branch: `feature/subtitle-pack-reuse` (from `upstream/development`; phase B stacked on FR2 helpers)
-Status: planned — second feature.
+Status: implemented on `feature/subtitle-pack-reuse` (stacked on FR3); unit tested and live tested (The Office
+S08: one search filled all 24 episodes from one SubDL pack).
 Sources: `../source/fr1-pack-aware-bulk-acquisition-notes.md`, `../source/combined-spec-fr1-fr2-fr3.md` §1/§7, verified in `../research/findings-2026-09-24.md` §3.
+
+## As implemented
+
+- `custom_libs/subliminal_patch/pack_cache.py`: bounded (MB) in-memory cache of downloaded archives with TTL and
+  single-flight downloads (concurrent requests for the same pack wait for one download). Enabled with pack reuse.
+- SubDL (`pack_reuse` provider option, from `general.pack_reuse`): packs (range or full season) are kept whole instead
+  of switching to the server's per-episode `unpack=1` file; the subtitle keeps `pack_members` (the server's
+  `unpack_files`) and `pack_member` (file for the target episode). `download_subtitle` fetches the whole archive
+  through the pack cache and reads `pack_member`. `pack_candidate_for(season, episode, ...)` returns a copy targeting
+  another episode when the member list verifiably contains it.
+- `generate_subtitles(..., candidates=...)`: choose among given subtitles instead of listing providers; results carry
+  the saved subtitle (`result.subtitle`).
+- `wanted/series.py::_fill_from_packs`: after an episode saves a subtitle from a pack, every other Wanted episode of
+  the same series that the pack contains (same exclusion rules as the Wanted job) is searched with that pack as its
+  only candidate — normal scoring, HI rules, save, post-processing, history. Episodes locked by another job are
+  skipped (their own search reuses the cached pack). Applies to legacy and parallel Wanted and to single-episode
+  searches (webhooks).
+- Settings (Subtitles → Search → "Subtitle Packs"): `pack_reuse` (off), `pack_cache_max_mb` (200),
+  `pack_cache_ttl_minutes` (60); save hook reconfigures the cache; changing the option restarts the SubDL provider.
+- OpenSubtitles.com offers no pack download through its API (each file is one download against the daily quota), so
+  it can't save downloads there; a season-wide listing cache could save searches (not implemented).
+
+### Wrong-season incident (found and fixed during live testing)
+
+The first live run filled six episodes with subtitles from other seasons (e.g. Arrested Development S03E01 from the
+season 1 pack). Cause in SubDL's existing pack logic: the range check compared only the episode number ("1–22"
+contains 1) and `get_matches` trusted the season for any pack whenever the video had an absolute episode number
+(5,003 of 7,160 non-anime episodes here). Upstream mostly avoided it by switching to per-episode unpacked files;
+keeping packs whole exposed it (upstream's no-unpack fallback has the same flaw). Fix: a pack must match the
+video's season unless the absolute episode number is what falls in its range; the absolute number is only kept on
+packs matched that way; pack members whose server season or filename names another season are rejected; sibling
+fill only uses packs matched by season. The six wrong files were deleted and the episodes re-indexed. Regression
+tests reproduce both real cases.
 
 ## Problem (verified)
 
