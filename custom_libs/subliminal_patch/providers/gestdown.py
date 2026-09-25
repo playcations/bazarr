@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import time
 
 from requests import JSONDecodeError
 from requests import Session
@@ -20,8 +19,6 @@ from subzero.language import Language
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.gestdown.info"
-# longest Retry-After waited for inline instead of throttling the provider
-_MAX_INLINE_WAIT = 10
 
 
 class GestdownSubtitle(Subtitle):
@@ -108,26 +105,15 @@ class GestdownProvider(Provider):
         return region.get_or_create(key, fetch, expiration_time=ttl, should_cache_fn=lambda value: value is not None)
 
     def _get(self, url, download=False):
-        """GET an API url, handling Gestdown's rate limiting (429 + Retry-After)."""
-        for attempt in range(2):
-            response = self._session.get(url, allow_redirects=True, timeout=30)
-            if response.status_code != 429:
-                return response
-
+        """GET an API url. Gestdown's rate limiting (429 with Retry-After) is left to Bazarr's provider throttling."""
+        response = self._session.get(url, allow_redirects=True)
+        if response.status_code == 429:
             retry_after = response.headers.get("Retry-After")
-            try:
-                wait = float(retry_after) if retry_after is not None else None
-            except ValueError:
-                wait = None
-            if download and wait is None:
+            if download and retry_after is None:
                 # not the rate limiter: Gestdown's own Addic7ed accounts are out of downloads
                 raise DownloadLimitExceeded("Gestdown download limit reached")
-            if attempt == 0 and wait is not None and wait <= _MAX_INLINE_WAIT:
-                logger.debug("Gestdown rate limit reached, waiting %s seconds", wait)
-                time.sleep(wait)
-                continue
             error = TooManyRequests(f"Gestdown rate limit reached (Retry-After: {retry_after})")
-            error.retry_after = wait
+            error.retry_after = retry_after
             raise error
         return response
 

@@ -221,29 +221,16 @@ def test_stops_at_the_first_show_with_subtitles(requests_mock):
     assert second.call_count == 0
 
 
-def test_short_retry_after_is_waited_once(requests_mock, mocker):
-    sleep = mocker.patch("subliminal_patch.providers.gestdown.time.sleep")
-    _mock_show(requests_mock)
-    requests_mock.get(f"{_BASE_URL}/shows/{_SHOW}/1/English", [
-        {"status_code": 429, "headers": {"Retry-After": "2"}},
-        {"json": {"episodes": [{"season": 1, "number": 1, "subtitles": [_sub("a")]}]}},
-    ])
-
-    with GestdownProvider() as provider:
-        assert [s.id for s in provider.list_subtitles(_episode(1), {Language.fromietf("en")})] == ["a"]
-    sleep.assert_called_once_with(2.0)
-
-
-def test_long_retry_after_throttles_the_provider(requests_mock):
+def test_rate_limit_is_left_to_the_provider_throttling(requests_mock):
     from subliminal_patch.exceptions import TooManyRequests
 
     _mock_show(requests_mock)
-    requests_mock.get(f"{_BASE_URL}/shows/{_SHOW}/1/English", status_code=429, headers={"Retry-After": "90"})
+    requests_mock.get(f"{_BASE_URL}/shows/{_SHOW}/1/English", status_code=429, headers={"Retry-After": "2"})
 
     with GestdownProvider() as provider:
         with pytest.raises(TooManyRequests) as error:
             provider.list_subtitles(_episode(1), {Language.fromietf("en")})
-    assert error.value.retry_after == 90
+    assert error.value.retry_after == "2"
 
 
 def test_download_pool_exhausted(requests_mock, subtitle):
