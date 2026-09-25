@@ -1,3 +1,4 @@
+import pytest
 from subliminal.video import Movie
 from subliminal_patch.core import SZProviderPool
 from subliminal_patch.subtitle import Subtitle
@@ -41,6 +42,14 @@ class FakeProvider:
         subtitle.content = subtitle.fake_content
 
 
+@pytest.fixture(autouse=True)
+def fresh_cache(monkeypatch):
+    from dogpile.cache import make_region
+    from subliminal_patch import core
+
+    monkeypatch.setattr(core, "region", make_region().configure("dogpile.cache.memory"))
+
+
 def _best(monkeypatch, reject):
     monkeypatch.setattr("subliminal_patch.core.provider_registry", {"fake": FakeProvider})
     pool = SZProviderPool(providers=["fake"])
@@ -64,3 +73,19 @@ def test_reject_only_when_hi_is_excluded_and_not_removed_by_mods():
     assert not _reject_detected_hi("force non-HI", ["remove_HI"])
     assert not _reject_detected_hi("don't prefer", [])
     assert not _reject_detected_hi("force HI", [])
+
+
+def test_subtitle_with_hi_content_is_not_downloaded_again(monkeypatch):
+    downloads = []
+    original = FakeProvider.download_subtitle
+
+    def counting(self, subtitle):
+        downloads.append(subtitle.id)
+        original(self, subtitle)
+
+    monkeypatch.setattr(FakeProvider, "download_subtitle", counting)
+    _best(monkeypatch, reject=True)
+    _best(monkeypatch, reject=True)
+
+    assert downloads.count("hi-content") == 1
+    assert downloads.count("regular") == 2
