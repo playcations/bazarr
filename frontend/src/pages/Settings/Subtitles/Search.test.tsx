@@ -56,6 +56,14 @@ describe("SettingsSubtitlesSearchView", () => {
     ).toBeInTheDocument();
   });
 
+  it("should render the subtitle packs option", () => {
+    renderPage();
+
+    expect(
+      screen.getByText("Reuse Subtitle Packs Across Episodes"),
+    ).toBeInTheDocument();
+  });
+
   it("should render the parallel wanted option", () => {
     renderPage();
 

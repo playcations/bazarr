@@ -54,6 +54,9 @@ declare namespace Settings {
     wanted_max_active_items: number;
     provider_default_max_in_flight: number;
     provider_limits: string[];
+    pack_reuse: boolean;
+    pack_cache_max_mb: number;
+    pack_cache_ttl_minutes: number;
     minimum_score: number;
     minimum_score_movie: number;
     movie_default_enabled: boolean;

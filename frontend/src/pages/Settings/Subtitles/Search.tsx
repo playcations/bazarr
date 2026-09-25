@@ -118,6 +118,37 @@ const SettingsSubtitlesSearchView: FunctionComponent = () => {
           results scores.
         </Message>
       </Section>
+      <Section header="Subtitle Packs">
+        <Check
+          label="Reuse Subtitle Packs Across Episodes"
+          settingKey="settings-general-pack_reuse"
+        ></Check>
+        <Message>
+          When a provider offers a season or multi-episode pack, download the
+          whole pack once and use it to fill every wanted episode it contains
+          instead of downloading one file per episode. Each episode is still
+          scored and checked against its language profile. Currently supported
+          by SubDL.
+        </Message>
+        <CollapseBox settingKey="settings-general-pack_reuse">
+          <Number
+            label="Pack Cache Size (MB)"
+            settingKey="settings-general-pack_cache_max_mb"
+            min={10}
+            max={4096}
+          ></Number>
+          <Number
+            label="Keep Downloaded Packs For (minutes)"
+            settingKey="settings-general-pack_cache_ttl_minutes"
+            min={1}
+            max={1440}
+          ></Number>
+          <Message>
+            Downloaded packs are kept in memory so other episodes can use them
+            without downloading them again.
+          </Message>
+        </CollapseBox>
+      </Section>
       <Section header="Wanted Performance">
         <Check
           label="Search Multiple Wanted Items At Once"

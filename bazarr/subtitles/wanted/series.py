@@ -40,8 +40,11 @@ def _episode_due_languages(episode):
 
 
 def _search_episode(episode, languages, job_id=None, fallback_allowed=False, only_providers=None,
-                    video_cache=None):
-    """Search and save subtitles for these languages of the episode. Returns how many subtitles were saved."""
+                    video_cache=None, candidates=None, fill_from_packs=True):
+    """Search and save subtitles for these languages of the episode. Returns how many subtitles were saved.
+
+    candidates: choose among these subtitles instead of searching providers.
+    fill_from_packs: when a saved subtitle comes from a pack, also fill the other Wanted episodes it contains."""
     audio_language_list = get_audio_profile_languages(episode.audio_language)
     if len(audio_language_list) > 0:
         audio_language = audio_language_list[0]['name']
@@ -53,6 +56,7 @@ def _search_episode(episode, languages, job_id=None, fallback_allowed=False, onl
                         "True" if language.endswith(':forced') else "False") for language in languages]
 
     saved = 0
+    packs = []
     for result in generate_subtitles(path_mappings.path_replace(episode.path),
                                      language_tuples,
                                      audio_language,
@@ -64,15 +68,67 @@ def _search_episode(episode, languages, job_id=None, fallback_allowed=False, onl
                                      job_id=job_id,
                                      fallback_allowed=fallback_allowed,
                                      only_providers=only_providers,
-                                     video_cache=video_cache):
+                                     video_cache=video_cache,
+                                     candidates=candidates):
         if result:
             saved += 1
+            if getattr(getattr(result, 'subtitle', None), 'pack_members', None):
+                packs.append(result.subtitle)
             store_subtitles(episode.sonarrEpisodeId)
             history_log(1, episode.sonarrSeriesId, episode.sonarrEpisodeId, result)
             send_notifications(episode.sonarrSeriesId, episode.sonarrEpisodeId, result.message)
             event_stream(type='series', action='update', payload=episode.sonarrSeriesId)
             event_stream(type='episode-wanted', action='delete', payload=episode.sonarrEpisodeId)
+
+    if packs and fill_from_packs and settings.general.pack_reuse:
+        _fill_from_packs(episode, packs)
     return saved
+
+
+def _fill_from_packs(episode, packs):
+    """Use packs just downloaded for this episode to fill the missing subtitles of the other Wanted episodes of the
+    same season, without searching providers again. Each episode is still scored and checked on its own."""
+    available = get_providers() or []
+    packs = [pack for pack in packs if pack.provider_name in available]
+    if not packs:
+        return
+
+    conditions = [(TableEpisodes.sonarrSeriesId == episode.sonarrSeriesId),
+                  (TableEpisodes.sonarrEpisodeId != episode.sonarrEpisodeId),
+                  (TableEpisodes.missing_subtitles.is_not(None)),
+                  (TableEpisodes.missing_subtitles != '[]')]
+    conditions += get_exclusion_clause('series')
+    siblings = database.execute(
+        select(TableEpisodes.sonarrEpisodeId, TableEpisodes.season, TableEpisodes.episode,
+               TableEpisodes.absoluteEpisode, TableEpisodes.title.label('episodeTitle'))
+        .select_from(TableEpisodes)
+        .join(TableShows)
+        .where(reduce(operator.and_, conditions))) \
+        .all()
+
+    filled = 0
+    for sibling in siblings:
+        candidates = [candidate for candidate in
+                      (pack.pack_candidate_for(sibling.season, sibling.episode,
+                                               absolute_episode=sibling.absoluteEpisode,
+                                               episode_title=sibling.episodeTitle) for pack in packs)
+                      if candidate is not None]
+        if not candidates:
+            continue
+
+        # an episode another job is searching right now will find the pack itself (it's cached)
+        with media_lock('series', sibling.sonarrEpisodeId, blocking=False) as acquired:
+            if not acquired:
+                continue
+            sibling_details = _load_episode(sibling.sonarrEpisodeId, refresh_index=False)
+            languages = _episode_due_languages(sibling_details) if sibling_details else []
+            if not languages:
+                continue
+            filled += _search_episode(sibling_details, languages, candidates=candidates, fill_from_packs=False)
+
+    if filled:
+        logging.info(f"BAZARR Filled {filled} subtitles of other episodes from the pack downloaded for "
+                     f"{episode.path}")
 
 
 def _stamp_episode_attempts(episode, languages):

@@ -4,6 +4,7 @@ import os
 import re
 import time
 import io
+import copy
 from threading import Lock
 from typing import Callable
 
@@ -24,6 +25,7 @@ from subliminal_patch.subtitle import Subtitle
 from subliminal.subtitle import fix_line_ending
 from subliminal_patch.providers import Provider
 from subliminal_patch.providers import utils
+from subliminal_patch.pack_cache import pack_cache
 
 logger = logging.getLogger(__name__)
 
@@ -94,9 +96,36 @@ class SubdlSubtitle(Subtitle):
         if is_ai_translation:
             self.release_info = f'AI translation (SubDL) from {ai_source_language}: {self.release_info}'
 
+    #: members of a pack kept whole (pack reuse): the server's unpack_files entries
+    pack_members = None
+    #: name of the member to read for target_episode
+    pack_member = None
+
     @property
     def id(self):
         return self.file_id
+
+    def pack_candidate_for(self, season, episode, absolute_episode=None, episode_title=None):
+        """A copy of this pack subtitle targeting another episode of the pack, or None if the pack doesn't
+        (verifiably) contain it. Used to fill several episodes from one downloaded pack."""
+        if not self.pack_members or not (self.is_pack or self.is_full_season):
+            return None
+        if self.season and season != self.season:
+            return None
+        entry = SubdlProvider._select_unpack_entry(self.pack_members, target_episode=episode,
+                                                   absolute_episode=absolute_episode,
+                                                   prefer_hi=bool(self.hearing_impaired))
+        if entry is None:
+            return None
+
+        candidate = copy.copy(self)
+        candidate.target_episode = episode
+        candidate.absolute_episode = absolute_episode
+        candidate.episode_title = episode_title
+        candidate.pack_member = entry.get('name')
+        candidate.content = None
+        candidate.matches = set()
+        return candidate
 
     def get_matches(self, video):
         matches = set()
@@ -168,7 +197,7 @@ class SubdlProvider(Provider):
 
     video_types = (Episode, Movie)
 
-    def __init__(self, api_key=None, ai_translate=False, include_ai_translated=False):
+    def __init__(self, api_key=None, ai_translate=False, include_ai_translated=False, pack_reuse=False):
         if not api_key:
             raise ConfigurationError('Api_key must be specified')
 
@@ -177,6 +206,9 @@ class SubdlProvider(Provider):
         self.api_key = api_key
         self.ai_translate = ai_translate
         self.include_ai_translated = include_ai_translated
+        # Download season/multi-episode packs as a whole (once, see pack_cache) instead of one member file per
+        # episode, so a single download can serve every episode of the pack.
+        self.pack_reuse = pack_reuse
         self._started = None
         # One informational log per video for AI-translate availability notices.
         # Bazarr shares one provider instance across threads, so guard the set.
@@ -496,6 +528,8 @@ class SubdlProvider(Provider):
             is_pack = False
             is_direct_file = False
             is_full_season = False
+            pack_members = None
+            pack_member = None
             download_link = item['url']
             # Keep the archive name as the public id: bazarr persists it in the
             # blacklist and in history, so changing it would silently invalidate
@@ -554,7 +588,12 @@ class SubdlProvider(Provider):
                         absolute_episode=absolute_episode,
                         prefer_hi=item_is_hi,
                     )
-                    if unpack_entry:
+                    if self.pack_reuse:
+                        # keep the whole pack: its members tell which file to read for this episode, and which
+                        # other episodes it can fill from the same download
+                        pack_members = item.get('unpack_files') or []
+                        pack_member = unpack_entry.get('name') if unpack_entry else None
+                    elif unpack_entry:
                         download_link = unpack_entry['url']
                         file_id = f"{item['name']}/{unpack_entry['file_n_id']}"
                         # `or` not `.get(default)`: the API sends season/episode
@@ -609,6 +648,9 @@ class SubdlProvider(Provider):
                 matched_id=matched_id,
                 matched_title=matched_title,
             )
+            if is_pack and pack_members is not None:
+                subtitle.pack_members = pack_members
+                subtitle.pack_member = pack_member
             subtitle.get_matches(video)
             if subtitle.language in languages:  # make sure only desired subtitles variants are returned
                 subtitles.append(subtitle)
@@ -981,25 +1023,34 @@ class SubdlProvider(Provider):
         safe_link = self._redact(download_link)
 
         subtitle.content = None
-        try:
-            r = self.checked(
-                lambda: self.session.get(download_link, timeout=30)
-            )
-        except SubdlRequestRejected as error:
-            # A subtitle that no longer exists fails this download only; bazarr
-            # falls through to the next candidate.
-            logger.warning(f'subdl: download rejected for {safe_link}: {error}')
-            return
 
-        if r is None or not r.content:
+        def fetch():
+            try:
+                response = self.checked(
+                    lambda: self.session.get(download_link, timeout=30)
+                )
+            except SubdlRequestRejected as error:
+                # A subtitle that no longer exists fails this download only; bazarr
+                # falls through to the next candidate.
+                logger.warning(f'subdl: download rejected for {safe_link}: {error}')
+                return None
+            return response.content if response is not None else None
+
+        if subtitle.pack_members is not None:
+            # a pack kept whole is downloaded once for all of its episodes
+            content = pack_cache.get_or_fetch(('subdl', subtitle.download_link), fetch)
+        else:
+            content = fetch()
+
+        if not content:
             logger.error(f'Could not download subtitle from {safe_link}')
             return
 
-        archive = self._open_archive(io.BytesIO(r.content))
+        archive = self._open_archive(io.BytesIO(content))
         if archive is None:
             if subtitle.is_direct_file:
                 # subdl unpack=1: response is a raw subtitle file, not an archive
-                subtitle.content = fix_line_ending(r.content)
+                subtitle.content = fix_line_ending(content)
             else:
                 logger.error(f'Could not open subtitle archive from {safe_link}')
             return
@@ -1016,6 +1067,12 @@ class SubdlProvider(Provider):
             subtitle.content = None
 
     def _extract(self, subtitle, archive, safe_link):
+        if subtitle.pack_member:
+            # the member the server identified for this episode
+            for name in archive.namelist():
+                if name == subtitle.pack_member or name.rsplit('/', 1)[-1] == subtitle.pack_member:
+                    subtitle.content = fix_line_ending(archive.read(name))
+                    return
         if subtitle.is_pack or subtitle.is_full_season:
             # Match by episode number inside the archive. Only reached when the
             # server did not already expose the individual file via unpack=1.
