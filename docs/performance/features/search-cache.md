@@ -28,3 +28,15 @@ is added; everything below uses that region.
 
 Live: first full Wanted series pass (6,631 episodes) took 25 minutes with the cache filling; see testing.md for the
 second pass.
+
+## Follow-ups from live testing
+- Gestdown errors seen (connection errors, `500` on the per-episode refresh endpoint, `404` on downloads of removed
+  subtitles) all also occurred on the NAS at sequential speed; no `429` rate-limit response was ever seen. They are
+  Gestdown-side issues; since the rework they only fail that subtitle/episode instead of throttling the provider.
+- Shows Gestdown doesn't have are remembered (not-found answers cached) instead of looked up for every episode.
+- The ~270 Gestdown calls left in cached passes were downloads of subtitles rejected for hearing-impaired content
+  (HI-excluded requirement). Rejections are now remembered in the cache (`hi_content.<provider>.<id>`), so they aren't
+  downloaded again.
+- Buffered cache writes are flushed every 100 entries / 60 s, at exit and on shutdown/restart.
+
+Result: consecutive full Wanted series passes (6,631 episodes): 25 min cold, then under 3 minutes with 1 provider call.
