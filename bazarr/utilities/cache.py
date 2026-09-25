@@ -15,7 +15,7 @@ from utilities.backup import sizeof_fmt
 
 
 def apply_cache_settings():
-    search_results_cache.configure(settings.cache.search_results_hours)
+    search_results_cache.configure(settings.cache.search_results_hours, settings.cache.archive_retention_days)
 
 
 def get_cache_stats():

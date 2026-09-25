@@ -204,3 +204,18 @@ def test_connection_errors_are_not_remembered(download_pool):
     assert not search_results_cache.failed_download(_candidates("flaky")[0])
     download_pool.download_subtitle(_candidates("flaky")[0])
     assert not search_results_cache.failed_download(_candidates("flaky")[0])
+
+
+def test_failed_downloads_arent_remembered_when_search_results_arent_reused(download_pool):
+    search_results_cache.configure(0)
+    _download_best(download_pool, _candidates("gone", "good"))
+    _download_best(download_pool, _candidates("gone", "good"))
+    assert DownloadProvider.downloads.count("gone") == 2
+
+
+def test_archive_retention_is_configured_with_the_cache():
+    try:
+        search_results_cache.configure(24, archive_days=4)
+        assert search_results_cache.archive_ttl == 4 * 86400
+    finally:
+        search_results_cache.configure(0)
