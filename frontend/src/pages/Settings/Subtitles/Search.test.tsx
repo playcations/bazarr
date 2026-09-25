@@ -56,6 +56,14 @@ describe("SettingsSubtitlesSearchView", () => {
     ).toBeInTheDocument();
   });
 
+  it("should render the parallel wanted option", () => {
+    renderPage();
+
+    expect(
+      screen.getByText("Search Multiple Wanted Items At Once"),
+    ).toBeInTheDocument();
+  });
+
   it("should render expanded search sections", () => {
     renderPage();
 

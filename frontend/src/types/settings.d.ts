@@ -50,6 +50,10 @@ declare namespace Settings {
     language_equals: string[];
     multithreading: boolean;
     shared_provider_discovery: boolean;
+    wanted_parallel_enabled: boolean;
+    wanted_max_active_items: number;
+    provider_default_max_in_flight: number;
+    provider_limits: string[];
     minimum_score: number;
     minimum_score_movie: number;
     movie_default_enabled: boolean;

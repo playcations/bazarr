@@ -24,6 +24,7 @@ from subliminal import refiner_manager
 from concurrent.futures import as_completed
 
 from .extensions import provider_registry
+from .provider_limits import provider_limits
 from .exceptions import MustGetBlacklisted
 from .score import compute_score, MAX_SCORES
 from subliminal.utils import hash_napiprojekt, hash_opensubtitles, hash_shooter, hash_thesubdb
@@ -401,7 +402,8 @@ class SZProviderPool(ProviderPool):
         logger.info('Listing subtitles with provider %r and languages %r', provider, to_request)
 
         try:
-            results = self[provider].list_subtitles(video, to_request)
+            with provider_limits.slot(provider):
+                results = self[provider].list_subtitles(video, to_request)
             seen = []
             out = []
             for s in results:
@@ -435,7 +437,7 @@ class SZProviderPool(ProviderPool):
             logger.exception('Unexpected error in provider %r: %s', provider, traceback.format_exc())
             self.throttle_callback(provider, e, ids=ids, language=list(languages)[0] if len(languages) else None)
 
-    def list_subtitles(self, video, languages):
+    def list_subtitles(self, video, languages, providers=None):
         """List subtitles.
 
         patch: handle LanguageReverseError
@@ -444,13 +446,14 @@ class SZProviderPool(ProviderPool):
         :type video: :class:`~subliminal.video.Video`
         :param languages: languages to search for.
         :type languages: set of :class:`~babelfish.language.Language`
+        :param providers: only search these providers of the pool (default: all of them).
         :return: found subtitles.
         :rtype: list of :class:`~subliminal.subtitle.Subtitle`
 
         """
         subtitles = []
 
-        for name in self.providers:
+        for name in self._providers_to_search(providers):
             # check discarded providers
             if name in self.discarded_providers:
                 logger.debug('Skipping discarded provider %r', name)
@@ -473,6 +476,11 @@ class SZProviderPool(ProviderPool):
             subtitles.extend(provider_subtitles)
 
         return subtitles
+
+    def _providers_to_search(self, providers=None):
+        if providers is None:
+            return list(self.providers)
+        return [name for name in self.providers if name in providers]
 
     def download_subtitle(self, subtitle):
         """Download `subtitle`'s :attr:`~subliminal.subtitle.Subtitle.content`.
@@ -505,7 +513,8 @@ class SZProviderPool(ProviderPool):
                 if self.pre_download_hook:
                     self.pre_download_hook(subtitle)
 
-                self[subtitle.provider_name].download_subtitle(subtitle)
+                with provider_limits.slot(subtitle.provider_name):
+                    self[subtitle.provider_name].download_subtitle(subtitle)
                 if self.post_download_hook:
                     self.post_download_hook(subtitle)
 
@@ -776,16 +785,19 @@ class SZAsyncProviderPool(SZProviderPool):
 
         return provider, provider_subtitles
 
-    def list_subtitles(self, video, languages, blacklist=None, ban_list=None):
+    def list_subtitles(self, video, languages, blacklist=None, ban_list=None, providers=None):
         if is_windows_special_path:
-            return super(SZAsyncProviderPool, self).list_subtitles(video, languages)
+            return super(SZAsyncProviderPool, self).list_subtitles(video, languages, providers=providers)
 
         subtitles = []
+        names = self._providers_to_search(providers)
+        if not names:
+            return subtitles
 
-        with ThreadPoolExecutor(self.max_workers) as executor:
-            for provider, provider_subtitles in executor.map(self.list_subtitles_provider, self.providers,
-                                                             itertools.repeat(video, len(self.providers)),
-                                                             itertools.repeat(languages, len(self.providers))):
+        with ThreadPoolExecutor(min(self.max_workers, len(names))) as executor:
+            for provider, provider_subtitles in executor.map(self.list_subtitles_provider, names,
+                                                             itertools.repeat(video, len(names)),
+                                                             itertools.repeat(languages, len(names))):
                 # discard provider that failed
                 if provider_subtitles is None:
                     logger.info('Discarding provider %s', provider)

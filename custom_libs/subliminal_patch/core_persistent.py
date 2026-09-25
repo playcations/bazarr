@@ -43,14 +43,19 @@ def download_subtitles(subtitles, pool_instance):
         pool_instance.download_subtitle(subtitle)
 
 
-def list_candidates(video, languages, pool_instance):
-    """List subtitles once for several languages so each of them can then be resolved with select_best_subtitles."""
+def list_candidates(video, languages, pool_instance, providers=None):
+    """List subtitles once for several languages so each of them can then be resolved with select_best_subtitles.
+
+    providers restricts the listing to some of the pool's providers."""
     languages = set(languages) - video.subtitle_languages
     if not languages:
         return []
 
     logger.info("Listing subtitles for %r and languages %r", video, languages)
-    subtitles = pool_instance.list_subtitles(video, languages)
+    if providers is None:
+        subtitles = pool_instance.list_subtitles(video, languages)
+    else:
+        subtitles = pool_instance.list_subtitles(video, languages, providers=providers)
     logger.info("Found %d subtitle(s)", len(subtitles))
     return subtitles
 

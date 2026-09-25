@@ -94,3 +94,29 @@ def test_provider_is_initialized_once_when_requested_concurrently(monkeypatch):
 
     del pool["slow"]
     assert "slow" not in pool.initialized_providers
+
+
+class _HTTPError(Exception):
+    def __init__(self, headers):
+        super().__init__("429 Client Error: Too Many Requests")
+        self.response = type("Response", (), {"headers": headers})()
+
+
+@pytest.mark.parametrize("exception, expected", [
+    (_HTTPError({"Retry-After": "120"}), 120),
+    (_HTTPError({"Retry-After": "1"}), 30),
+    (_HTTPError({"Retry-After": "999999"}), 86400),
+    (_HTTPError({}), None),
+    (_HTTPError({"Retry-After": "soon"}), None),
+    (type("E", (Exception,), {"retry_after": 300})(), 300),
+])
+def test_retry_after(exception, expected):
+    delta = get_providers._retry_after(exception)
+    assert (delta.total_seconds() if delta else None) == expected
+
+
+def test_retry_after_http_date():
+    when = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=10)
+    header = when.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    delta = get_providers._retry_after(_HTTPError({"Retry-After": header}))
+    assert 550 < delta.total_seconds() <= 600

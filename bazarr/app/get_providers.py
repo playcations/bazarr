@@ -14,6 +14,7 @@ import re
 import tempfile
 import threading
 
+from email.utils import parsedate_to_datetime
 from zoneinfo import ZoneInfo
 from requests import ConnectionError
 from subzero.language import Language
@@ -22,6 +23,7 @@ from subliminal_patch.exceptions import (TooManyRequests, APIThrottled, ParseRes
 from subliminal.exceptions import DownloadLimitExceeded, ServiceUnavailable, AuthenticationError, ConfigurationError
 from subliminal import region as subliminal_cache_region
 from subliminal_patch.extensions import provider_registry
+from subliminal_patch.provider_limits import provider_limits
 
 from app.get_args import args
 from app.config import settings
@@ -432,6 +434,10 @@ def provider_throttle(name, exception, ids=None, language=None):
     else:
         throttle_delta, throttle_description = datetime.timedelta(minutes=10), "10 minutes"
 
+    retry_after = _retry_after(exception)
+    if retry_after is not None:
+        throttle_delta, throttle_description = retry_after, f"{pretty_seconds(retry_after)} (Retry-After)"
+
     throttle_until = datetime.datetime.now() + throttle_delta
 
     if cls_name not in VALID_COUNT_EXCEPTIONS or throttled_count(name):
@@ -454,6 +460,40 @@ def provider_throttle(name, exception, ids=None, language=None):
             event_tracker.track_throttling(provider=name, exception_name=cls_name, exception_info=trac_info)
 
     update_throttled_provider()
+
+
+def _retry_after(exception):
+    """How long the provider asked us to wait, from a retry_after attribute or the Retry-After header of an HTTP
+    error response. Bounded between 30 seconds and one day."""
+    value = getattr(exception, 'retry_after', None)
+    if value is None:
+        response = getattr(exception, 'response', None)
+        headers = getattr(response, 'headers', None) or {}
+        value = headers.get('Retry-After') if hasattr(headers, 'get') else None
+    if value is None:
+        return None
+
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        try:
+            retry_at = parsedate_to_datetime(str(value))
+        except (TypeError, ValueError):
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=datetime.timezone.utc)
+        seconds = (retry_at - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
+
+    return datetime.timedelta(seconds=min(max(seconds, 30), 86400))
+
+
+def pretty_seconds(delta):
+    seconds = int(delta.total_seconds())
+    if seconds < 120:
+        return f"{seconds} seconds"
+    if seconds < 7200:
+        return f"{seconds // 60} minutes"
+    return f"{seconds // 3600} hours"
 
 
 def _get_traceback_info(exc: Exception):
@@ -630,6 +670,21 @@ def set_throttled_providers(data):
         raise
 
 
+def apply_provider_limits():
+    # provider limits only apply while parallel Wanted searching is enabled, otherwise searches behave as before
+    provider_limits.configure(enabled=settings.general.wanted_parallel_enabled,
+                              default_max_in_flight=settings.general.provider_default_max_in_flight,
+                              overrides=get_array_from_setting(settings.general.provider_limits))
+
+
+def get_array_from_setting(value):
+    if isinstance(value, str):
+        return [x for x in value.split(',') if x.strip()]
+    return list(value or [])
+
+
 tp = get_throttled_providers()
 if not isinstance(tp, dict):
     raise ValueError('tp should be a dict')
+
+apply_provider_limits()

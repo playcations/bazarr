@@ -143,6 +143,10 @@ validators = [
     Validator('general.enabled_integrations', must_exist=True, default=[], is_type_of=list),
     Validator('general.multithreading', must_exist=True, default=True, is_type_of=bool),
     Validator('general.shared_provider_discovery', must_exist=True, default=False, is_type_of=bool),
+    Validator('general.wanted_parallel_enabled', must_exist=True, default=False, is_type_of=bool),
+    Validator('general.wanted_max_active_items', must_exist=True, default=8, is_type_of=int, gte=1, lte=64),
+    Validator('general.provider_default_max_in_flight', must_exist=True, default=1, is_type_of=int, gte=1, lte=16),
+    Validator('general.provider_limits', must_exist=True, default=[], is_type_of=list),
     Validator('general.chmod_enabled', must_exist=True, default=False, is_type_of=bool),
     Validator('general.enable_strm_support', must_exist=True, default=False, is_type_of=bool),
     Validator('general.chmod', must_exist=True, default='0640', is_type_of=str),
@@ -582,6 +586,7 @@ base_url = settings.general.base_url.rstrip('/')
 ignore_keys = ['flask_secret_key']
 
 array_keys = ['excluded_tags',
+              'provider_limits',
               'exclude',
               'included_codecs',
               'subzero_mods',
@@ -706,6 +711,7 @@ def save_settings(settings_items):
     audio_tracks_parsing_changed = False
     reset_providers = False
     language_equals_changed = False
+    provider_limits_changed = False
 
     # Subzero Mods
     update_subzero = False
@@ -756,6 +762,10 @@ def save_settings(settings_items):
 
         if key == 'settings-general-language_equals':
             language_equals_changed = True
+
+        if key in ['settings-general-wanted_parallel_enabled', 'settings-general-provider_default_max_in_flight',
+                   'settings-general-provider_limits']:
+            provider_limits_changed = True
 
         if key == 'settings-general-default_und_embedded_subtitles_lang':
             undefined_subtitles_track_default_changed = True
@@ -891,6 +901,10 @@ def save_settings(settings_items):
                     subzero_mods.append(value)
 
             update_subzero = True
+
+    if provider_limits_changed:
+        from .get_providers import apply_provider_limits
+        apply_provider_limits()
 
     from app.jobs_queue import jobs_queue
 
