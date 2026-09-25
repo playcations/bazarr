@@ -7,7 +7,6 @@ from types import SimpleNamespace
 import pytest
 from subzero.language import Language
 
-from subliminal_patch.pack_cache import PackCache, pack_cache
 from subliminal_patch.providers.subdl import SubdlProvider, SubdlSubtitle
 from subtitles.wanted import series as wanted_series
 
@@ -37,58 +36,6 @@ def _pack_subtitle(target_episode, episodes=(1, 2, 3)):
     return subtitle
 
 
-# ── pack cache ───────────────────────────────────────────────────────────────
-
-
-def test_cache_fetches_a_pack_once_for_concurrent_requests():
-    cache = PackCache()
-    cache.configure(True)
-    calls = []
-
-    def fetch():
-        calls.append(1)
-        time.sleep(0.05)
-        return b"archive"
-
-    results = []
-    threads = [threading.Thread(target=lambda: results.append(cache.get_or_fetch("pack", fetch))) for _ in range(5)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
-    assert calls == [1]
-    assert results == [b"archive"] * 5
-
-
-def test_cache_disabled_always_fetches():
-    cache = PackCache()
-    calls = []
-    for _ in range(2):
-        cache.get_or_fetch("pack", lambda: calls.append(1) or b"archive")
-    assert len(calls) == 2
-
-
-def test_cache_is_bounded_and_expires():
-    cache = PackCache()
-    cache.configure(True, max_megabytes=1, ttl_minutes=1)
-    cache.put("a", b"x" * 600 * 1024)
-    cache.put("b", b"x" * 600 * 1024)
-    assert cache.get("a") is None
-    assert cache.get("b") is not None
-
-    cache.ttl = 0
-    cache.put("c", b"y")
-    assert cache.get("c") is None
-
-
-def test_failed_fetch_is_not_cached():
-    cache = PackCache()
-    cache.configure(True)
-    assert cache.get_or_fetch("pack", lambda: None) is None
-    assert cache.get_or_fetch("pack", lambda: b"archive") == b"archive"
-
-
 # ── SubDL packs ──────────────────────────────────────────────────────────────
 
 
@@ -105,28 +52,54 @@ def test_pack_candidate_for_another_episode():
     assert pack.pack_candidate_for(2, 2) is None
 
 
-def test_pack_members_of_several_episodes_come_from_one_download(monkeypatch):
+@pytest.fixture(autouse=True)
+def fresh_cache():
+    """Downloaded packs are kept in the subtitles cache: every test starts with an empty one."""
+    from subliminal.cache import region
+
+    region.configure("dogpile.cache.memory", replace_existing_backend=True)
+    yield
+
+
+def _counting_provider(monkeypatch, delay=0):
     provider = SubdlProvider(api_key="key", pack_reuse=True)
     downloads = []
 
     def get(url, timeout):
         downloads.append(url)
+        time.sleep(delay)
         return SimpleNamespace(content=_zip(1, 2, 3), status_code=200)
 
     monkeypatch.setattr(provider, "checked", lambda fn, **kwargs: fn())
     monkeypatch.setattr(provider.session, "get", get)
-    pack_cache.configure(True)
-    try:
-        first = _pack_subtitle(1)
-        provider.download_subtitle(first)
-        second = first.pack_candidate_for(1, 3)
-        provider.download_subtitle(second)
-    finally:
-        pack_cache.configure(False)
+    return provider, downloads
+
+
+def test_pack_members_of_several_episodes_come_from_one_download(monkeypatch):
+    provider, downloads = _counting_provider(monkeypatch)
+
+    first = _pack_subtitle(1)
+    provider.download_subtitle(first)
+    second = first.pack_candidate_for(1, 3)
+    provider.download_subtitle(second)
 
     assert len(downloads) == 1
     assert b"Episode 1" in first.content
     assert b"Episode 3" in second.content
+
+
+def test_concurrent_requests_for_a_pack_download_it_once(monkeypatch):
+    provider, downloads = _counting_provider(monkeypatch, delay=0.05)
+    subtitles = [_pack_subtitle(1).pack_candidate_for(1, episode) for episode in (1, 2, 3)]
+
+    threads = [threading.Thread(target=provider.download_subtitle, args=(s,)) for s in subtitles]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(downloads) == 1
+    assert all(s.content for s in subtitles)
 
 
 # ── filling other episodes ───────────────────────────────────────────────────

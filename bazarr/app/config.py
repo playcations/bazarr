@@ -148,8 +148,6 @@ validators = [
     Validator('general.provider_default_max_in_flight', must_exist=True, default=1, is_type_of=int, gte=1, lte=16),
     Validator('general.provider_limits', must_exist=True, default=[], is_type_of=list),
     Validator('general.pack_reuse', must_exist=True, default=False, is_type_of=bool),
-    Validator('general.pack_cache_max_mb', must_exist=True, default=200, is_type_of=int, gte=10, lte=4096),
-    Validator('general.pack_cache_ttl_minutes', must_exist=True, default=60, is_type_of=int, gte=1, lte=1440),
     Validator('general.chmod_enabled', must_exist=True, default=False, is_type_of=bool),
     Validator('general.enable_strm_support', must_exist=True, default=False, is_type_of=bool),
     Validator('general.chmod', must_exist=True, default='0640', is_type_of=str),
@@ -715,7 +713,6 @@ def save_settings(settings_items):
     reset_providers = False
     language_equals_changed = False
     provider_limits_changed = False
-    pack_cache_changed = False
 
     # Subzero Mods
     update_subzero = False
@@ -771,9 +768,6 @@ def save_settings(settings_items):
                    'settings-general-provider_limits']:
             provider_limits_changed = True
 
-        if key in ['settings-general-pack_reuse', 'settings-general-pack_cache_max_mb',
-                   'settings-general-pack_cache_ttl_minutes']:
-            pack_cache_changed = True
 
         if key == 'settings-general-default_und_embedded_subtitles_lang':
             undefined_subtitles_track_default_changed = True
@@ -913,10 +907,6 @@ def save_settings(settings_items):
     if provider_limits_changed:
         from .get_providers import apply_provider_limits
         apply_provider_limits()
-
-    if pack_cache_changed:
-        from .get_providers import apply_pack_cache
-        apply_pack_cache()
 
     from app.jobs_queue import jobs_queue
 
