@@ -16,6 +16,7 @@ from .get_args import args
 from .config import settings, base_url
 from .database import close_database
 from .app import create_app
+import subliminal
 
 app = create_app()
 app.register_blueprint(api_bp, url_prefix=base_url.rstrip('/') + '/api')
@@ -97,6 +98,11 @@ class Server:
             pass
 
     def close_all(self):
+        try:
+            # write the subtitles cache's buffered entries before exiting (os._exit skips atexit handlers)
+            subliminal.region.backend.sync()
+        except Exception:
+            pass
         print("Closing database...")
         close_database()
         if self.server:
