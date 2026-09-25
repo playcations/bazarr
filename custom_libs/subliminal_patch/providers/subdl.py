@@ -110,12 +110,12 @@ class SubdlSubtitle(Subtitle):
         (verifiably) contain it. Used to fill several episodes from one downloaded pack."""
         if not self.pack_members or not (self.is_pack or self.is_full_season):
             return None
-        if self.season and season != self.season:
+        # only fill episodes of the season the pack was matched on, never by absolute numbering
+        if not self.season or season != self.season or self.absolute_episode:
             return None
         entry = SubdlProvider._select_unpack_entry(self.pack_members, target_episode=episode,
-                                                   absolute_episode=absolute_episode,
                                                    prefer_hi=bool(self.hearing_impaired))
-        if entry is None:
+        if entry is None or not SubdlProvider._member_season_ok(entry, season):
             return None
 
         candidate = copy.copy(self)
@@ -528,6 +528,7 @@ class SubdlProvider(Provider):
             is_pack = False
             is_direct_file = False
             is_full_season = False
+            matched_by_absolute_range = False
             pack_members = None
             pack_member = None
             download_link = item['url']
@@ -579,6 +580,15 @@ class SubdlProvider(Provider):
                 if has_range or is_full_season:
                     is_pack = True
 
+                    # A pack only covers the season it belongs to: a range check on the
+                    # episode number alone lets "episodes 1-22" of season 1 pass for S03E01.
+                    # A different season is only acceptable when the absolute episode
+                    # number is what falls in the range (anime arc numbering).
+                    matched_by_absolute_range = bool(
+                        absolute_episode and has_range and ep_from <= absolute_episode <= ep_end)
+                    if item_season and item_season != video.season and not matched_by_absolute_range:
+                        continue
+
                     # Prefer the per-episode file the server already extracted
                     # (unpack=1). Downloading a whole season archive client-side
                     # is the fallback, not the plan.
@@ -592,6 +602,9 @@ class SubdlProvider(Provider):
                         # keep the whole pack: its members tell which file to read for this episode, and which
                         # other episodes it can fill from the same download
                         pack_members = item.get('unpack_files') or []
+                        if unpack_entry and not matched_by_absolute_range and \
+                                not self._member_season_ok(unpack_entry, video.season):
+                            continue
                         pack_member = unpack_entry.get('name') if unpack_entry else None
                     elif unpack_entry:
                         download_link = unpack_entry['url']
@@ -639,7 +652,9 @@ class SubdlProvider(Provider):
                 uploader=uploader,
                 season=item_season,
                 episode=item_episode,
-                absolute_episode=absolute_episode,
+                # for a pack, the absolute number is what vouches for a different season: only keep it when it
+                # actually matched the pack's range
+                absolute_episode=absolute_episode if not is_pack or matched_by_absolute_range else None,
                 is_pack=is_pack,
                 is_direct_file=is_direct_file,
                 is_full_season=is_full_season,
@@ -807,6 +822,20 @@ class SubdlProvider(Provider):
             return None
         episode = guess.get('episode')
         return episode if isinstance(episode, int) else None
+
+    @classmethod
+    def _member_season_ok(cls, entry, season):
+        """A pack member whose server metadata or filename names another season doesn't belong to season."""
+        server_season = cls._episode_number(entry.get('season'))
+        if server_season and server_season != season:
+            return False
+        try:
+            name_season = guessit(entry.get('name') or '', {'type': 'episode'}).get('season')
+        except Exception:
+            name_season = None
+        if isinstance(name_season, list):
+            return season in name_season
+        return not name_season or name_season == season
 
     @classmethod
     def _select_unpack_entry(cls, files, target_episode, absolute_episode=None,
