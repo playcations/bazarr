@@ -13,6 +13,7 @@ import {
 import {
   adaptiveSearchingDelayOption,
   adaptiveSearchingDeltaOption,
+  forcedOnlySearchOption,
 } from "./options";
 
 const SettingsSubtitlesSearchView: FunctionComponent = () => {
@@ -90,6 +91,18 @@ const SettingsSubtitlesSearchView: FunctionComponent = () => {
             value, Bazarr will skip searching for subtitles.
           </Message>
         </CollapseBox>
+        <Selector
+          label="Search For Forced-Only Subtitles"
+          settingKey="settings-general-forced_only_search_days"
+          settingOptions={{ onSaved: (v) => (v === undefined ? 0 : v) }}
+          options={forcedOnlySearchOption}
+        ></Selector>
+        <Message>
+          Forced subtitles only exist for some movies and episodes. They are
+          always searched together with other missing languages, but when forced
+          subtitles are the only thing missing they are searched at most this
+          often (new media is always searched once).
+        </Message>
         <Check
           label="Search Enabled Providers Simultaneously"
           settingKey="settings-general-multithreading"

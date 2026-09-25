@@ -20,7 +20,7 @@ from app.event_handler import event_stream
 from app.jobs_queue import jobs_queue
 from app.config import settings
 
-from ..adaptive_searching import is_search_active, updateFailedAttempts
+from ..adaptive_searching import is_search_active, updateFailedAttempts, filter_forced_only_languages
 from ..download import generate_subtitles
 from ..locks import media_lock
 from .parallel import run_parallel_wanted
@@ -36,7 +36,7 @@ def _episode_due_languages(episode):
             logging.debug(
                 f"BAZARR Search is throttled by adaptive search for this episode {episode.path} and "
                 f"language: {language}")
-    return languages
+    return filter_forced_only_languages(languages, episode.failedAttempts)
 
 
 def _search_episode(episode, languages, job_id=None, fallback_allowed=False, only_providers=None,

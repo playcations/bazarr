@@ -149,3 +149,50 @@ def updateFailedAttempts(desired_language, attempt_string):
     logging.debug(f"Adaptive searching: updated attempts that will be saved to database is {updated_attempts}")
 
     return str(updated_attempts)
+
+
+def filter_forced_only_languages(languages, attempt_string):
+    """Drop forced languages when they are the only ones left to search and one was searched recently.
+
+    Forced subtitles are rare: searching every provider for them on every Wanted run keeps nearly the whole library
+    busy. They are still searched whenever another language of the same media is searched (they come with the same
+    provider results), and at least once for new media; on their own, only every general.forced_only_search_days
+    days (0 searches every time, -1 only once).
+
+    @param languages: language codes to search, like ['en:forced']
+    @param attempt_string: string representation of the failedAttempts list of lists
+    @return: the languages that should be searched now
+    """
+    days = settings.general.forced_only_search_days
+    if not days or not languages or not all(language.endswith(':forced') for language in languages):
+        return languages
+
+    try:
+        attempts = ast.literal_eval(attempt_string or '[]')
+        if not isinstance(attempts, list):
+            raise ValueError
+    except (ValueError, SyntaxError):
+        return languages
+
+    now = datetime.now()
+    due = []
+    for language in languages:
+        timestamps = [x[1] for x in attempts if isinstance(x, (list, tuple)) and len(x) > 1 and x[0] == language]
+        if not timestamps:
+            # never searched: new media gets one search
+            due.append(language)
+            continue
+        if days < 0:
+            continue
+        try:
+            latest = datetime.fromtimestamp(max(timestamps))
+        except (OverflowError, ValueError, OSError, TypeError):
+            due.append(language)
+            continue
+        if latest + timedelta(days=days) <= now:
+            due.append(language)
+
+    if len(due) != len(languages):
+        logging.debug(f"BAZARR Forced subtitles {sorted(set(languages) - set(due))} were searched recently and are "
+                      f"the only missing subtitles, skipping them for now")
+    return due
