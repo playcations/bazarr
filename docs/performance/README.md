@@ -16,6 +16,7 @@ proposed upstream. All options ship with defaults that preserve legacy behavior;
 | `upstream-watchlist.md` | Open upstream PRs/issues to reconsider later. |
 | `testing.md` | Local live test setup and A/B protocol. |
 | `research/provider-audit-2026-09-25.md` | Per-provider audit for FR1–FR3, Gestdown deep-dive. |
+| `features/search-cache.md` | Search results reuse through the existing subtitles cache, cache settings. |
 
 Where a source document and a feature plan disagree, the feature plan (backed by the research file) wins.
 
@@ -34,9 +35,10 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `feature/subtitle-pack-reuse` | FR1 | FR3 | done, tested, live tested | yes, after FR2/FR3 |
 | `feature/parallel-wanted-scheduler` | FR3 | FR2 + both fix branches | done, tested, live A/B running | yes, after Discord discussion |
 | `fix/opensubtitlescom-concurrent-searches` | OpenSubtitles results scored against another video when searches overlap | development | done, tested | yes, small |
-| `feature/gestdown-season-cache` | Gestdown whole-season listing cache, show cache, 429/Retry-After handling | development | done, tested (live API) | yes |
-| `feature/subdl-season-search-cache` | SubDL season-only/title-only searches cached per season | development | done, tested | yes |
+| `feature/gestdown-season-cache` | Gestdown whole-season listings and show lookups in the subtitles cache, 429/Retry-After handling | development | done, tested (live API) | yes |
+| `feature/subdl-season-search-cache` | SubDL season-only/title-only searches in the subtitles cache | development | done, tested | yes |
 | `feature/forced-only-search-interval` | forced-only requirements searched every N days | development | done, tested, live | yes |
+| `feature/cache-settings` | search results reuse in the existing subtitles cache, configurable cache retention, cache UI/API, thread-safe backend | development | done, tested, live | yes |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
 Implementation order: fix branches → FR2 → FR1 → FR3.
@@ -51,7 +53,8 @@ pretty-quick and stylelint.
 | Feature | Keys | UI |
 |---|---|---|
 | FR2 | `general.shared_provider_discovery` | Subtitles → Search |
-| FR1 | `general.pack_reuse`, `general.pack_cache_max_mb`, `general.pack_cache_ttl_minutes` | Subtitles → Search ("Subtitle packs") |
+| FR1 | `general.pack_reuse` | Subtitles → Search ("Subtitle packs") |
+| Cache | `cache.search_results_hours`, `cache.retention_days`, `cache.archive_retention_days` | Scheduler → Cache |
 | Forced | `general.forced_only_search_days` | Subtitles → Search (Performance) |
 | FR3 | `general.wanted_parallel_enabled`, `general.wanted_max_active_items`, `general.provider_default_max_in_flight`, `general.provider_limits`, `general.local_io_max_in_flight`, (`general.persistence_batching`) | Subtitles → Search ("Wanted performance"), Providers → Advanced |
 
