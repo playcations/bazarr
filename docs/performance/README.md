@@ -16,6 +16,7 @@ proposed upstream. All options ship with defaults that preserve legacy behavior;
 | `upstream-watchlist.md` | Open upstream PRs/issues to reconsider later. |
 | `testing.md` | Local live test setup and A/B protocol. |
 | `research/provider-audit-2026-09-25.md` | Per-provider audit for FR1–FR3, Gestdown deep-dive. |
+| `deploy/` | Running the integration build on the TrueNAS server (image, custom app, rollback). |
 | `features/search-cache.md` | Search results reuse through the existing subtitles cache, cache settings. |
 
 Where a source document and a feature plan disagree, the feature plan (backed by the research file) wins.
