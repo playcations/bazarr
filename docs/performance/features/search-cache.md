@@ -36,9 +36,15 @@ second pass.
   subtitles) all also occurred on the NAS at sequential speed; no `429` rate-limit response was ever seen. They are
   Gestdown-side issues; since the rework they only fail that subtitle/episode instead of throttling the provider.
 - Shows Gestdown doesn't have are remembered (not-found answers cached) instead of looked up for every episode.
+- No new durations: season listings/searches and failed downloads follow "Reuse Search Results For" (not cached when
+  0), packs follow "Downloaded Archives Retention", show lookups and TMDB spoken languages use subliminal's
+  `SHOW_EXPIRATION_TIME`; Gestdown uses the provider session's default timeout and raises `TooManyRequests` with
+  `Retry-After` for Bazarr's provider throttling.
 - The ~270 Gestdown calls left in cached passes were downloads of subtitles rejected for hearing-impaired content
   (HI-excluded requirement). Rejections are now remembered in the cache (`hi_content.<provider>.<id>`), so they aren't
   downloaded again.
-- Buffered cache writes are flushed every 100 entries / 60 s, at exit and on shutdown/restart.
+- Buffered cache writes use Bazarr's existing explicit sync points: `generate_subtitles` now also syncs when a
+  search finds nothing (it used to only sync after saving a subtitle), plus manual downloads, cache maintenance and
+  shutdown/restart (`close_all`). No timer-based flushing.
 
 Result: consecutive full Wanted series passes (6,631 episodes): 25 min cold, then under 3 minutes with 1 provider call.
