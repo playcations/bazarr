@@ -37,7 +37,7 @@ def _movie_due_languages(movie):
 
 
 def _search_movie(movie, languages, job_id=None, fallback_allowed=False, only_providers=None, video_cache=None):
-    """Search and save subtitles for these languages of the movie. Returns True if anything was saved."""
+    """Search and save subtitles for these languages of the movie. Returns how many subtitles were saved."""
     audio_language_list = get_audio_profile_languages(movie.audio_language)
     if len(audio_language_list) > 0:
         audio_language = audio_language_list[0]['name']
@@ -48,7 +48,7 @@ def _search_movie(movie, languages, job_id=None, fallback_allowed=False, only_pr
                         "True" if language.endswith(':hi') else "False",
                         "True" if language.endswith(':forced') else "False") for language in languages]
 
-    found_any = False
+    saved = 0
     for result in generate_subtitles(path_mappings.path_replace_movie(movie.path),
                                      language_tuples,
                                      audio_language,
@@ -63,12 +63,12 @@ def _search_movie(movie, languages, job_id=None, fallback_allowed=False, only_pr
                                      video_cache=video_cache):
 
         if result:
-            found_any = True
+            saved += 1
             store_subtitles_movie(movie.radarrId)
             history_log_movie(1, movie.radarrId, result)
             send_notifications_movie(movie.radarrId, result.message)
             event_stream(type='movie-wanted', action='delete', payload=movie.radarrId)
-    return found_any
+    return saved
 
 
 def _stamp_movie_attempts(movie, languages):
