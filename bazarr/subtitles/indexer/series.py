@@ -232,25 +232,10 @@ def store_subtitles(sonarr_episode_id, use_cache=True):
     # We store actual subtitles for this episode in the database
     logging.debug(f"BAZARR has stored those languages to DB: {embedded_subtitles + external_subtitles}")
 
-    # We list missing subtitles for this episode and store them in the database. The first forced subtitle found for
-    # a series makes forced subtitles wanted again for its other episodes.
-    if forced_evidence.enabled() and _first_forced_evidence(item.sonarrSeriesId, sonarr_episode_id):
-        list_missing_subtitles(no=item.sonarrSeriesId)
-    else:
-        list_missing_subtitles(epno=sonarr_episode_id)
+    # We list missing subtitles for this episode and store them in the database
+    list_missing_subtitles(epno=sonarr_episode_id)
 
     logging.debug(f'BAZARR ended subtitles indexing for this file: {mapped_path}')
-
-
-def _first_forced_evidence(sonarr_series_id, sonarr_episode_id):
-    """Whether this episode has a forced subtitle in a language no other episode of the series has one in."""
-    languages = database.execute(
-        select(TableEpisodesSubtitles.language)
-        .where(TableEpisodesSubtitles.sonarrEpisodeId == sonarr_episode_id, TableEpisodesSubtitles.forced.is_(True))
-        .distinct()).scalars().all()
-    return any(not forced_evidence.has_forced_evidence('series', sonarr_series_id, language,
-                                                       exclude_episode_id=sonarr_episode_id)
-               for language in languages)
 
 
 def list_missing_subtitles(no=None, epno=None, *args, **kwargs):  # job_id might be provided but isn't used for now
@@ -276,7 +261,7 @@ def list_missing_subtitles(no=None, epno=None, *args, **kwargs):  # job_id might
     matches_audio = lambda language: any(x['code2'] == language['language'] for x in get_audio_profile_languages(
                                 episode_subtitles.audio_language))
 
-    # forced subtitles aren't wanted for series that don't have any (see forced_evidence)
+    # forced subtitles aren't wanted for episodes that don't need them (see forced_evidence)
     forced_needs = forced_evidence.forced_needs('series', {x.sonarrSeriesId for x in episodes_subtitles})
 
     for episode_subtitles in episodes_subtitles:
@@ -294,7 +279,8 @@ def list_missing_subtitles(no=None, epno=None, *args, **kwargs):  # job_id might
                         if not matches_audio(language):
                             continue
                     if language['forced'] == "True" and forced_needs.not_needed(episode_subtitles.sonarrSeriesId,
-                                                                                language['language']):
+                                                                                language['language'],
+                                                                                episode_subtitles.sonarrEpisodeId):
                         continue
                     desired_subtitles_list.append({'language': language['language'],
                                                    'forced': str(language['forced']),
