@@ -240,3 +240,19 @@ def test_download_pool_exhausted(requests_mock, subtitle):
     with GestdownProvider() as provider:
         with pytest.raises(DownloadLimitExceeded):
             provider.download_subtitle(subtitle)
+
+
+@pytest.mark.parametrize("status", [404, 500])
+def test_download_failure_only_fails_that_subtitle(requests_mock, subtitle, status):
+    requests_mock.get(subtitle.page_link, status_code=status)
+    with GestdownProvider() as provider:
+        provider.download_subtitle(subtitle)
+    assert subtitle.content is None
+
+
+def test_episode_refresh_error_is_a_miss(requests_mock):
+    _mock_show(requests_mock)
+    requests_mock.get(f"{_BASE_URL}/shows/{_SHOW}/1/English", json={"episodes": []})
+    requests_mock.get(f"{_BASE_URL}/subtitles/get/{_SHOW}/1/5/English", status_code=500)
+    with GestdownProvider() as provider:
+        assert provider.list_subtitles(_episode(5), {Language.fromietf("en")}) == []

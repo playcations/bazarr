@@ -193,6 +193,12 @@ class GestdownProvider(Provider):
             response = self._get(f"{_BASE_URL}/subtitles/get/{show_id}/{season}/{episode}/{lang}")
             if response.status_code in (404, 423):
                 return []
+            if response.status_code >= 500:
+                # this endpoint refreshes the episode from Addic7ed and sometimes fails: a miss for this episode,
+                # not a reason to stop using the provider
+                logger.debug("Gestdown returned %s for show %s S%sE%s", response.status_code, show_id, season,
+                             episode)
+                return []
             response.raise_for_status()
             try:
                 return response.json()["matchingSubtitles"] or []
@@ -238,5 +244,9 @@ class GestdownProvider(Provider):
 
     def download_subtitle(self, subtitle: GestdownSubtitle):
         response = self._get(subtitle.page_link, download=True)
+        if response.status_code == 404 or response.status_code >= 500:
+            # a subtitle that disappeared or failed fails this download only; the next candidate is tried
+            logger.warning("Gestdown returned %s when downloading %s", response.status_code, subtitle.id)
+            return
         response.raise_for_status()
         subtitle.content = response.content
