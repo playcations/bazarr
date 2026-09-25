@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import threading
 import time
 
 from requests import JSONDecodeError
@@ -12,6 +11,7 @@ from subliminal_patch.core import Episode
 from subliminal_patch.language import PatchedAddic7edConverter
 from subliminal_patch.providers import Provider
 from subliminal_patch.providers.utils import update_matches
+from subliminal.cache import region
 from subliminal.exceptions import DownloadLimitExceeded
 from subliminal_patch.exceptions import TooManyRequests
 from subliminal_patch.subtitle import Subtitle
@@ -23,7 +23,6 @@ _BASE_URL = "https://api.gestdown.info"
 # show lookups rarely change; season listings are refreshed regularly by Gestdown
 _SHOW_TTL = 24 * 3600
 _SEASON_TTL = 3600
-_MAX_CACHE_ENTRIES = 5000
 # longest Retry-After waited for inline instead of throttling the provider
 _MAX_INLINE_WAIT = 10
 
@@ -95,13 +94,6 @@ class GestdownProvider(Provider):
 
     _converter = PatchedAddic7edConverter()
 
-    def __init__(self):
-        # The instance is shared by concurrent searches and lives across Wanted runs: shows and whole season
-        # listings are cached so the other episodes of a season don't need any listing request.
-        self._cache = {}
-        self._cache_lock = threading.Lock()
-        self._fetch_locks = {}
-
     def initialize(self):
         self._session = Session()
         self._session.headers.update({"User-Agent": "Bazarr"})
@@ -109,27 +101,11 @@ class GestdownProvider(Provider):
     def terminate(self):
         self._session.close()
 
-    def _cached(self, key, ttl, fetch):
-        """Return the cached value for key or fetch it once, even when several threads ask for it together."""
-        with self._cache_lock:
-            entry = self._cache.get(key)
-            if entry and entry[1] > time.monotonic():
-                return entry[0]
-            lock = self._fetch_locks.setdefault(key, threading.Lock())
-        with lock:
-            with self._cache_lock:
-                entry = self._cache.get(key)
-                if entry and entry[1] > time.monotonic():
-                    return entry[0]
-            value = fetch()
-            with self._cache_lock:
-                self._cache[key] = (value, time.monotonic() + ttl)
-                if len(self._cache) > _MAX_CACHE_ENTRIES:
-                    now = time.monotonic()
-                    for stale in [k for k, (_, expires) in self._cache.items() if expires <= now]:
-                        self._cache.pop(stale, None)
-                        self._fetch_locks.pop(stale, None)
-            return value
+    @staticmethod
+    def _cached(key, ttl, fetch):
+        """Keep show lookups and season listings in the subtitles cache so the other episodes of a season don't need
+        any listing request. Concurrent requests for the same key wait for a single fetch."""
+        return region.get_or_create(key, fetch, expiration_time=ttl, should_cache_fn=lambda value: value is not None)
 
     def _get(self, url, download=False):
         """GET an API url, handling Gestdown's rate limiting (429 + Retry-After)."""
@@ -167,7 +143,7 @@ class GestdownProvider(Provider):
                 logger.debug("Couldn't get shows from JSON for %s", video)
                 return None
 
-        return self._cached(("show", video.series_tvdb_id), _SHOW_TTL, fetch)
+        return self._cached(f"gestdown.show.{video.series_tvdb_id}", _SHOW_TTL, fetch)
 
     def _season(self, show_id, season, lang):
         """{episode number: [subtitle dicts]} for a whole season in one request."""
@@ -184,7 +160,7 @@ class GestdownProvider(Provider):
             return {episode.get("number"): episode.get("subtitles") or [] for episode in episodes
                     if episode.get("season") == season}
 
-        return self._cached(("season", show_id, season, lang), _SEASON_TTL, fetch)
+        return self._cached(f"gestdown.season.{show_id}.{season}.{lang}", _SEASON_TTL, fetch)
 
     def _episode(self, show_id, season, episode, lang):
         """Per-episode search, only when the season listing doesn't know the episode (it makes Gestdown refresh it
@@ -206,7 +182,7 @@ class GestdownProvider(Provider):
                 logger.debug("Couldn't get matching subtitles for show %s S%sE%s", show_id, season, episode)
                 return []
 
-        return self._cached(("episode", show_id, season, episode, lang), _SEASON_TTL, fetch)
+        return self._cached(f"gestdown.episode.{show_id}.{season}.{episode}.{lang}", _SEASON_TTL, fetch)
 
     def list_subtitles(self, video, languages):
         shows = self._search_show(video)
