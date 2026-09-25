@@ -753,3 +753,23 @@ def test_remote_policy_disables_ai_candidates(movies, requests_mock):
 
     with SubdlProvider("fake-key", ai_translate=True) as provider:
         assert provider.list_subtitles(movies["dune"], {Language("fas")}) == []
+
+
+def test_season_only_search_is_shared_by_the_episodes_of_a_season(monkeypatch):
+    from subliminal.video import Episode as _Episode
+    from subliminal_patch.providers.subdl import SubdlProvider as _Provider
+    from subzero.language import Language as _Language
+
+    provider = _Provider(api_key="key")
+    calls = []
+
+    def fake_search(params, description, paginate=False):
+        calls.append(description)
+        return [], {}
+
+    monkeypatch.setattr(provider, "_search", fake_search)
+    for number in (1, 2, 3):
+        provider.query({_Language("eng")}, _Episode(f"/tv/Show.S01E0{number}.mkv", "Show", 1, number))
+
+    assert calls.count("season-only") == 1
+    assert calls.count("episode") == 3
