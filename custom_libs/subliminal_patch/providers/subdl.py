@@ -1080,7 +1080,8 @@ class SubdlProvider(Provider):
             # a pack kept whole is downloaded once for all of its episodes
             # concurrent requests for the same pack wait for a single download
             content = region.get_or_create(f'subdl.pack.{subtitle.download_link}', fetch,
-                                           expiration_time=self.PACK_CACHE_TTL,
+                                           # kept as long as Bazarr keeps downloaded archives
+                                           expiration_time=search_results_cache.archive_ttl,
                                            should_cache_fn=lambda value: bool(value))
         else:
             content = fetch()
