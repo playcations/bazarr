@@ -8,6 +8,8 @@ import datetime
 import socket
 import traceback
 import time
+import copy
+import hashlib
 import threading
 import operator
 import unicodedata
@@ -17,10 +19,13 @@ import requests
 
 from os import scandir
 from collections import defaultdict
+from contextlib import contextmanager
 from bs4 import UnicodeDammit
 from babelfish import LanguageReverseError
 from guessit.jsonutils import GuessitEncoder
 from subliminal import refiner_manager
+from subliminal.cache import region
+from dogpile.cache.api import NO_VALUE
 from concurrent.futures import as_completed
 
 from .extensions import provider_registry
@@ -227,6 +232,56 @@ class _LanguageEquals(list):
                 break
 
 
+class _SearchResultsCache:
+    """Provider search results kept in the subtitles cache (subliminal's region) so a search already done for the
+    same file isn't sent to the provider again until it expires. Disabled while ttl is 0."""
+
+    _GENERATION_KEY = 'search_results_cache_generation'
+
+    def __init__(self):
+        self.ttl = 0
+        self._local = threading.local()
+
+    def configure(self, hours):
+        self.ttl = max(0, int(hours or 0)) * 3600
+
+    def key(self, provider, video, languages, provider_config):
+        generation = region.get(self._GENERATION_KEY, ignore_expiration=True)
+        parts = {
+            'generation': 0 if generation is NO_VALUE else generation,
+            'provider': provider,
+            'type': type(video).__name__,
+            'name': video.name,
+            'size': getattr(video, 'size', None),
+            'hashes': sorted((getattr(video, 'hashes', None) or {}).items()),
+            'languages': sorted(str(language) + (':hi' if getattr(language, 'hi', False) else '')
+                                for language in languages),
+            'config': sorted((str(k), repr(v)) for k, v in (provider_config or {}).items()),
+        }
+        digest = hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+        return f'search_results.{provider}.{digest}'
+
+    def clear(self):
+        """Make every cached search result unreachable; the files are removed by the cache maintenance task."""
+        generation = region.get(self._GENERATION_KEY, ignore_expiration=True)
+        region.set(self._GENERATION_KEY, (0 if generation is NO_VALUE else generation) + 1)
+
+    def bypassed(self):
+        return getattr(self._local, 'bypass', 0) > 0
+
+    @contextmanager
+    def bypass(self):
+        """Search the providers (and refresh the cache) instead of using cached results, e.g. for manual searches."""
+        self._local.bypass = getattr(self._local, 'bypass', 0) + 1
+        try:
+            yield
+        finally:
+            self._local.bypass -= 1
+
+
+search_results_cache = _SearchResultsCache()
+
+
 class SZProviderPool(ProviderPool):
     def __init__(self, providers=None, provider_configs=None, blacklist=None, ban_list=None, throttle_callback=None,
                  pre_download_hook=None, post_download_hook=None, language_hook=None, language_equals=None):
@@ -413,8 +468,7 @@ class SZProviderPool(ProviderPool):
         logger.info('Listing subtitles with provider %r and languages %r', provider, to_request)
 
         try:
-            with provider_limits.slot(provider):
-                results = self[provider].list_subtitles(video, to_request)
+            results = self._list_provider_subtitles(provider, video, to_request)
             seen = []
             out = []
             for s in results:
@@ -447,6 +501,31 @@ class SZProviderPool(ProviderPool):
             }
             logger.exception('Unexpected error in provider %r: %s', provider, traceback.format_exc())
             self.throttle_callback(provider, e, ids=ids, language=list(languages)[0] if len(languages) else None)
+
+    def _list_provider_subtitles(self, provider, video, languages):
+        """Ask a provider for subtitles, reusing its answer for the same file, languages and provider settings from
+        the subtitles cache while search results caching is enabled."""
+        ttl = search_results_cache.ttl
+        if not ttl:
+            with provider_limits.slot(provider):
+                return self[provider].list_subtitles(video, languages)
+
+        key = search_results_cache.key(provider, video, languages, self.provider_configs.get(provider))
+        if not search_results_cache.bypassed():
+            cached = region.get(key, expiration_time=ttl)
+            if cached is not NO_VALUE:
+                logger.debug('Using cached search results of provider %r for %r', provider, video)
+                # scoring and downloading modify subtitles: never hand out the cached objects themselves
+                return copy.deepcopy(cached)
+
+        # only an actual provider request takes one of the provider's lanes
+        with provider_limits.slot(provider):
+            results = list(self[provider].list_subtitles(video, languages) or [])
+        try:
+            region.set(key, copy.deepcopy(results))
+        except Exception:
+            logger.debug('Unable to cache search results of provider %r', provider, exc_info=True)
+        return results
 
     def list_subtitles(self, video, languages, providers=None):
         """List subtitles.

@@ -72,6 +72,15 @@ class SystemApi extends BaseApi {
     await this.delete("/backups", { filename });
   }
 
+  async cache() {
+    const response = await this.get<DataWrapper<System.Cache>>("/cache");
+    return response.data;
+  }
+
+  async clearCache(scope: "search" | "all") {
+    await this.delete("/cache", { scope });
+  }
+
   async health() {
     const response = await this.get<DataWrapper<System.Health[]>>("/health");
     return response.data;

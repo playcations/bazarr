@@ -198,6 +198,11 @@ validators = [
     # cors section
     Validator('cors.enabled', must_exist=True, default=False, is_type_of=bool),
 
+    # cache section
+    Validator('cache.search_results_hours', must_exist=True, default=0, is_type_of=int, gte=0, lte=720),
+    Validator('cache.retention_days', must_exist=True, default=14, is_type_of=int, gte=1, lte=365),
+    Validator('cache.archive_retention_days', must_exist=True, default=4, is_type_of=int, gte=1, lte=365),
+
     # backup section
     Validator('backup.folder', must_exist=True, default=os.path.join(args.config_dir, 'backup'),
               is_type_of=str),
@@ -712,6 +717,7 @@ def save_settings(settings_items):
     undefined_subtitles_track_default_changed = False
     audio_tracks_parsing_changed = False
     reset_providers = False
+    cache_settings_changed = False
     language_equals_changed = False
     provider_limits_changed = False
 
@@ -785,6 +791,9 @@ def save_settings(settings_items):
 
         if key == 'settings-general-debug':
             configure_debug = True
+
+        if key == 'settings-cache-search_results_hours':
+            cache_settings_changed = True
 
         if key == 'settings-general-hi_extension':
             os.environ["SZ_HI_EXTENSION"] = value or ""
@@ -908,6 +917,10 @@ def save_settings(settings_items):
     if provider_limits_changed:
         from .get_providers import apply_provider_limits
         apply_provider_limits()
+
+    if cache_settings_changed:
+        from utilities.cache import apply_cache_settings
+        apply_cache_settings()
 
     from app.jobs_queue import jobs_queue
 

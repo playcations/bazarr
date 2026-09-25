@@ -9,6 +9,7 @@ import subliminal
 from subzero.language import Language
 from subliminal_patch.core import save_subtitles
 from subliminal_patch.core_persistent import list_all_subtitles, download_subtitles
+from subliminal_patch.core import search_results_cache
 from subliminal_patch.score import compute_score, DEFAULT_SCORES
 
 from languages.get_languages import alpha3_from_alpha2, alpha2_from_alpha3
@@ -68,7 +69,9 @@ def manual_search(path, profile_id, providers, sceneName, title, media_type):
     if video:
         try:
             if providers:
-                subtitles = list_all_subtitles([video], language_set, pool)
+                # a manual search asks the providers again (and refreshes the cached results)
+                with search_results_cache.bypass():
+                    subtitles = list_all_subtitles([video], language_set, pool)
             else:
                 logging.info("BAZARR All providers are throttled")
                 return 'All providers are throttled'
