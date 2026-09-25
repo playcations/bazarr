@@ -1,8 +1,40 @@
 # FR3 — Provider-aware parallel Wanted scheduler
 
 Branch: `feature/parallel-wanted-scheduler` (from `upstream/development`; depends on the two fix branches)
-Status: planned — third feature; largest.
+Status: implemented on `feature/parallel-wanted-scheduler` (stacked on FR2 + both fix branches); unit tested,
+live A/B test in progress (see `../testing.md`).
 Sources: `../source/fr3-provider-aware-parallel-wanted-notes.md`, `../source/combined-spec-fr1-fr2-fr3.md` §3–§7, verified in `../research/findings-2026-09-24.md` §4.
+
+## As implemented
+
+- `custom_libs/subliminal_patch/provider_limits.py`: process-wide lanes per provider (`max_in_flight`, optional
+  minimum interval, monotonic clock), non-blocking `try_reserve()` for the scheduler, `slot()` wrapped around every
+  provider `list_subtitles` and `download_subtitle` call in `SZProviderPool`. Re-entrant per thread. Disabled (no-op)
+  unless parallel Wanted is enabled, so other paths behave exactly as before.
+- `SZProviderPool.list_subtitles(..., providers=None)` / async pool: search a subset of the pool's providers.
+- `generate_subtitles(..., only_providers=None, video_cache=None)`: restrict to providers (forces FR2 shared
+  discovery) and reuse the prepared/hashed `Video` between provider attempts.
+- `bazarr/subtitles/wanted/parallel.py`: `run_parallel_wanted(handler, rows, job_id)` — ThreadPoolExecutor of
+  `wanted_max_active_items` workers; each item: take the per-media lock (non-blocking, busy items retried at the end
+  with a blocking wait), then loop over enabled providers it hasn't tried, reserving the first one with free
+  capacity (enabled-provider order, no ranking), search only that provider, reload missing languages after a save,
+  stop when nothing due is missing. Whisper fallback only after all regular providers. Adaptive search stamped once
+  for the languages still missing, and only if no provider got throttled during the item. Job stops only when every
+  provider is throttled. Workers pass `job_id=None` so subtitle sync is queued as its own job (bounded by
+  Concurrent Jobs) instead of running inline.
+- `wanted/series.py`, `wanted/movies.py`: legacy code split into `_*_due_languages`, `_search_*`, `_stamp_*_attempts`,
+  `_load_*` helpers (legacy behavior unchanged) plus a handler class used by the runner. `wanted_download_subtitles*`
+  (webhooks, single searches) now take the per-media lock (`bazarr/subtitles/locks.py`).
+- `provider_throttle` honors `Retry-After` (seconds or HTTP-date, from a `retry_after` attribute or an HTTP error
+  response), bounded 30 s – 1 day; otherwise the fixed map as before.
+- Settings (Settings → Subtitles → Search → "Wanted Performance"): `wanted_parallel_enabled` (off),
+  `wanted_max_active_items` (8), `provider_default_max_in_flight` (1), `provider_limits` (chips,
+  `provider:requests[:ms]`). Save hook reconfigures lanes live. Per-provider limits live in the same section rather
+  than Providers → Advanced (simpler; can move later).
+- Tests: `tests/bazarr/test_parallel_wanted.py` (lanes, overrides, intervals, reservations, re-entrancy, runner:
+  parallel items within limits, first acceptable provider, partial results, exhaustion stamping, throttled
+  mid-search, all throttled, busy item retry) and Retry-After tests in `test_provider_thread_safety.py`.
+- Not done: local-I/O lane beyond sync offloading, persistence batching, cancellation (the jobs queue has no cancel).
 
 ## Goal
 
