@@ -139,6 +139,7 @@ validators = [
               is_in=['1w', '2w', '3w', '4w']),
     Validator('general.adaptive_searching_delta', must_exist=True, default='1w', is_type_of=str,
               is_in=['3d', '1w', '2w', '3w', '4w']),
+    Validator('general.forced_only_search_days', must_exist=True, default=0, is_type_of=int, gte=-1, lte=365),
     Validator('general.enabled_providers', must_exist=True, default=[], is_type_of=list),
     Validator('general.enabled_integrations', must_exist=True, default=[], is_type_of=list),
     Validator('general.multithreading', must_exist=True, default=True, is_type_of=bool),

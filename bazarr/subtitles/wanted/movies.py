@@ -18,7 +18,7 @@ from app.event_handler import event_stream
 from app.jobs_queue import jobs_queue
 from app.config import settings
 
-from ..adaptive_searching import is_search_active, updateFailedAttempts
+from ..adaptive_searching import is_search_active, updateFailedAttempts, filter_forced_only_languages
 from ..download import generate_subtitles
 
 
@@ -42,6 +42,11 @@ def _wanted_movie(movie, providers_list, job_id=None):
         else:
             logging.info(f"BAZARR Search is throttled by adaptive search for this movie {movie.path} and "
                          f"language: {language}")
+
+    due_languages = filter_forced_only_languages(languages_to_stamp, movie.failedAttempts)
+    if len(due_languages) != len(languages_to_stamp):
+        languages = [x for x, code in zip(languages, languages_to_stamp) if code in due_languages]
+        languages_to_stamp = due_languages
 
     found_any = False
     for result in generate_subtitles(path_mappings.path_replace_movie(movie.path),

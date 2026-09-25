@@ -49,6 +49,7 @@ declare namespace Settings {
     ip: string;
     language_equals: string[];
     multithreading: boolean;
+    forced_only_search_days: number;
     minimum_score: number;
     minimum_score_movie: number;
     movie_default_enabled: boolean;
