@@ -145,3 +145,62 @@ def test_file_backend_flushes_buffered_writes_by_itself(tmp_path, monkeypatch):
 
     backend.set("key-4", 4)
     assert len(os.listdir(cache_dir)) == 5
+
+
+SRT = b"1\n00:00:01,000 --> 00:00:02,000\nHello\n\n"
+
+
+class DownloadProvider(FakeProvider):
+    """'gone' downloads return nothing (removed subtitle), 'flaky' raises a connection error, others work."""
+    downloads = []
+
+    def list_subtitles(self, video, languages):
+        return [FakeSubtitle(sub_id) for sub_id in ("gone", "flaky", "good")]
+
+    def download_subtitle(self, subtitle):
+        type(self).downloads.append(subtitle.id)
+        if subtitle.id == "flaky":
+            import requests
+
+            raise requests.ConnectionError("timeout")
+        subtitle.content = None if subtitle.id == "gone" else SRT
+
+
+def _download_best(pool, candidates):
+    return [s.id for s in pool.download_best_subtitles(candidates, _episode(), {Language("eng")})]
+
+
+@pytest.fixture
+def download_pool(pool, monkeypatch):
+    monkeypatch.setattr("subliminal_patch.core.provider_registry", {"fake": DownloadProvider})
+    monkeypatch.setattr("subliminal_patch.core.DOWNLOAD_TRIES", 1, raising=False)
+    DownloadProvider.downloads = []
+    return pool
+
+
+def _candidates(*ids):
+    subtitles = []
+    for sub_id in ids:
+        subtitle = FakeSubtitle(sub_id)
+        subtitle.get_matches = lambda video: {"series", "season", "episode"}
+        subtitles.append(subtitle)
+    return subtitles
+
+
+def test_removed_subtitle_is_not_downloaded_again(download_pool):
+    assert _download_best(download_pool, _candidates("gone", "good")) == ["good"]
+    assert _download_best(download_pool, _candidates("gone", "good")) == ["good"]
+    assert DownloadProvider.downloads.count("gone") == 1
+
+
+def test_manual_search_retries_a_failed_download(download_pool):
+    _download_best(download_pool, _candidates("gone", "good"))
+    with search_results_cache.bypass():
+        _download_best(download_pool, _candidates("gone", "good"))
+    assert DownloadProvider.downloads.count("gone") == 2
+
+
+def test_connection_errors_are_not_remembered(download_pool):
+    assert not search_results_cache.failed_download(_candidates("flaky")[0])
+    download_pool.download_subtitle(_candidates("flaky")[0])
+    assert not search_results_cache.failed_download(_candidates("flaky")[0])
