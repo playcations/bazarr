@@ -265,3 +265,11 @@ def test_episode_refresh_error_is_a_miss(requests_mock):
     requests_mock.get(f"{_BASE_URL}/subtitles/get/{_SHOW}/1/5/English", status_code=500)
     with GestdownProvider() as provider:
         assert provider.list_subtitles(_episode(5), {Language.fromietf("en")}) == []
+
+
+def test_show_missing_from_gestdown_is_looked_up_once(requests_mock):
+    lookup = requests_mock.get(f"{_BASE_URL}/shows/external/tvdb/81189", status_code=404)
+    with GestdownProvider() as provider:
+        for number in (1, 2, 3):
+            assert provider.list_subtitles(_episode(number), {Language.fromietf("en")}) == []
+    assert lookup.call_count == 1

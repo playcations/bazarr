@@ -135,7 +135,8 @@ class GestdownProvider(Provider):
         def fetch():
             response = self._get(f"{_BASE_URL}/shows/external/tvdb/{video.series_tvdb_id}")
             if response.status_code == 404:
-                return None
+                # remember that Gestdown doesn't have this show, so its other episodes don't ask again
+                return []
             response.raise_for_status()
             try:
                 return response.json()["shows"]
