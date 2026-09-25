@@ -45,9 +45,10 @@ def test_series_needing_forced_throughout_keeps_wanting_them():
         1, "en", episode_id=40)
 
 
-def test_too_few_checked_episodes_to_judge_a_series():
+def test_share_is_computed_over_the_checked_episodes():
+    # 1 of 2 checked episodes has forced subtitles: 50%, above the 25% threshold
     needs = _series(found=[1], searched={2: OLD}, spoken=["en", "es"])
-    assert needs.not_needed(1, "en", episode_id=2)
+    assert not needs.not_needed(1, "en", episode_id=2)
 
 
 def test_forced_subtitles_found_in_a_single_language_series_count():
@@ -107,13 +108,15 @@ def test_tmdb_errors_are_not_cached(tmdb):
 def test_a_recompute_stops_asking_tmdb_after_an_error(tmdb, monkeypatch):
     calls = []
 
-    def lookup(kind, external_id):
+    def lookup(kind, external_id, session=None):
         calls.append(external_id)
         return None
 
     monkeypatch.setattr(forced_evidence, "_tmdb_spoken_languages", lookup)
     monkeypatch.setattr(forced_evidence.database, "execute",
                         lambda stmt: type("R", (), {"all": lambda self: [(1, 11), (2, 22), (3, 33)]})())
+    monkeypatch.setattr(forced_evidence.region, "backend", type("B", (), {"sync": lambda self: None})(),
+                        raising=False)
     assert forced_evidence._spoken_languages("movie", {1, 2, 3}) == {}
     assert len(calls) == 1
 
