@@ -143,24 +143,6 @@ const SettingsSubtitlesSearchView: FunctionComponent = () => {
           scored and checked against its language profile. Currently supported
           by SubDL.
         </Message>
-        <CollapseBox settingKey="settings-general-pack_reuse">
-          <Number
-            label="Pack Cache Size (MB)"
-            settingKey="settings-general-pack_cache_max_mb"
-            min={10}
-            max={4096}
-          ></Number>
-          <Number
-            label="Keep Downloaded Packs For (minutes)"
-            settingKey="settings-general-pack_cache_ttl_minutes"
-            min={1}
-            max={1440}
-          ></Number>
-          <Message>
-            Downloaded packs are kept in memory so other episodes can use them
-            without downloading them again.
-          </Message>
-        </CollapseBox>
       </Section>
       <Section header="Wanted Performance">
         <Check

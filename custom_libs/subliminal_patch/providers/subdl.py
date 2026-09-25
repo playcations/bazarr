@@ -22,10 +22,10 @@ from subliminal.exceptions import (ConfigurationError, ProviderError, DownloadLi
                                    ServiceUnavailable)
 from subliminal_patch.exceptions import APIThrottled
 from subliminal_patch.subtitle import Subtitle
+from subliminal.cache import region
 from subliminal.subtitle import fix_line_ending
 from subliminal_patch.providers import Provider
 from subliminal_patch.providers import utils
-from subliminal_patch.pack_cache import pack_cache
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +192,8 @@ class SubdlProvider(Provider):
     server_hostname = 'api.subdl.com'
     SEARCH_CACHE_TTL = 3600
     SEARCH_CACHE_MAX_ENTRIES = 2000
+    # packs kept whole (pack reuse) stay in the subtitles cache for the other episodes of the season
+    PACK_CACHE_TTL = 4 * 24 * 3600
 
     languages = {Language(*lang) for lang in list(language_converters['subdl'].to_subdl.keys())}
     languages.update(set(Language.rebuild(lang, forced=True) for lang in languages))
@@ -208,7 +210,7 @@ class SubdlProvider(Provider):
         self.api_key = api_key
         self.ai_translate = ai_translate
         self.include_ai_translated = include_ai_translated
-        # Download season/multi-episode packs as a whole (once, see pack_cache) instead of one member file per
+        # Download season/multi-episode packs as a whole (once, kept in the subtitles cache) instead of one member file per
         # episode, so a single download can serve every episode of the pack.
         self.pack_reuse = pack_reuse
         self._started = None
@@ -1089,7 +1091,10 @@ class SubdlProvider(Provider):
 
         if subtitle.pack_members is not None:
             # a pack kept whole is downloaded once for all of its episodes
-            content = pack_cache.get_or_fetch(('subdl', subtitle.download_link), fetch)
+            # concurrent requests for the same pack wait for a single download
+            content = region.get_or_create(f'subdl.pack.{subtitle.download_link}', fetch,
+                                           expiration_time=self.PACK_CACHE_TTL,
+                                           should_cache_fn=lambda value: bool(value))
         else:
             content = fetch()
 
