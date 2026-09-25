@@ -274,3 +274,20 @@ def test_lane_statistics():
     assert operations == 3
     assert per_operation >= 0.02
     assert waiting > 0
+
+
+def test_fast_providers_are_tried_first():
+    provider_limits.configure(True, 1)
+    try:
+        with provider_limits.slot("supersubtitles"):
+            time.sleep(0.05)
+        with provider_limits.slot("gestdown"):
+            pass
+
+        name, reservation = parallel._reserve_provider(["supersubtitles", "gestdown", "subdl"])
+        # never measured providers are tried first to learn their speed, then the fastest
+        assert name == "subdl"
+        provider_limits.unreserve(reservation)
+        assert parallel._reserve_provider(["supersubtitles", "gestdown"])[0] == "gestdown"
+    finally:
+        provider_limits.configure(False)
