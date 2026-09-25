@@ -304,3 +304,31 @@ def test_saved_subtitle_not_satisfying_the_language_stops_the_item(runner):
 
     assert handler.searches == [(1, "gestdown")]
     assert handler.stamped == {}
+
+
+def test_waiting_for_a_provider_wakes_up_when_one_is_released():
+    limits = ProviderLimits()
+    limits.configure(True, default_max_in_flight=1)
+    taken = limits.try_reserve("gestdown")
+    released_at = []
+
+    def release():
+        time.sleep(0.05)
+        released_at.append(time.monotonic())
+        limits.unreserve(taken)
+
+    threading.Thread(target=release).start()
+    provider, reservation = limits.reserve_any(["gestdown"])
+    assert provider == "gestdown" and reservation
+    assert time.monotonic() - released_at[0] < 0.05
+
+
+def test_waiting_for_a_provider_held_back_by_its_interval():
+    limits = ProviderLimits()
+    limits.configure(True, default_max_in_flight=2, overrides=["tvsubtitles:2:100"])
+    with limits.slot("tvsubtitles"):
+        pass
+    started = time.monotonic()
+    provider, _ = limits.reserve_any(["tvsubtitles"])
+    assert provider == "tvsubtitles"
+    assert 0.05 < time.monotonic() - started < 0.5
