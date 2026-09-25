@@ -264,3 +264,13 @@ def test_item_searched_by_another_job_is_retried_later(runner):
 
     assert (1, "gestdown") in handler.searches
     assert handler.missing[1] == []
+
+
+def test_lane_statistics():
+    limits = ProviderLimits()
+    limits.configure(True, default_max_in_flight=1)
+    _run_concurrently(limits, "subdl", 3, duration=0.02)
+    operations, per_operation, waiting = limits.stats()["subdl"]
+    assert operations == 3
+    assert per_operation >= 0.02
+    assert waiting > 0
