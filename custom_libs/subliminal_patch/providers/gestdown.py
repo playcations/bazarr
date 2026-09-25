@@ -7,7 +7,7 @@ from requests import JSONDecodeError
 from requests import Session
 from subliminal.score import get_equivalent_release_groups
 from subliminal.utils import sanitize_release_group
-from subliminal_patch.core import Episode
+from subliminal_patch.core import Episode, search_results_cache
 from subliminal_patch.language import PatchedAddic7edConverter
 from subliminal_patch.providers import Provider
 from subliminal_patch.providers.utils import update_matches
@@ -20,11 +20,17 @@ from subzero.language import Language
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.gestdown.info"
-# show lookups rarely change; season listings are refreshed regularly by Gestdown
+# show lookups rarely change
 _SHOW_TTL = 24 * 3600
+# season listings are search results: kept as long as the others (see search_results_cache), or this long when that's
+# disabled so the episodes of a season still share a run's requests
 _SEASON_TTL = 3600
 # longest Retry-After waited for inline instead of throttling the provider
 _MAX_INLINE_WAIT = 10
+
+
+def _season_ttl():
+    return search_results_cache.ttl or _SEASON_TTL
 
 
 class GestdownSubtitle(Subtitle):
@@ -161,7 +167,7 @@ class GestdownProvider(Provider):
             return {episode.get("number"): episode.get("subtitles") or [] for episode in episodes
                     if episode.get("season") == season}
 
-        return self._cached(f"gestdown.season.{show_id}.{season}.{lang}", _SEASON_TTL, fetch)
+        return self._cached(f"gestdown.season.{show_id}.{season}.{lang}", _season_ttl(), fetch)
 
     def _episode(self, show_id, season, episode, lang):
         """Per-episode search, only when the season listing doesn't know the episode (it makes Gestdown refresh it
@@ -183,7 +189,7 @@ class GestdownProvider(Provider):
                 logger.debug("Couldn't get matching subtitles for show %s S%sE%s", show_id, season, episode)
                 return []
 
-        return self._cached(f"gestdown.episode.{show_id}.{season}.{episode}.{lang}", _SEASON_TTL, fetch)
+        return self._cached(f"gestdown.episode.{show_id}.{season}.{episode}.{lang}", _season_ttl(), fetch)
 
     def list_subtitles(self, video, languages):
         shows = self._search_show(video)
