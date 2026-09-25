@@ -116,6 +116,7 @@ def _run_generate_subtitles(save_error):
          mock.patch('subtitles.download.download_best_subtitles',
                     return_value={video: [subtitle]}), \
          mock.patch('subtitles.download.save_subtitles', side_effect=save_error), \
+         mock.patch('subtitles.download.subliminal.region'), \
          mock.patch('app.get_providers.blacklist_log') as log, \
          mock.patch('app.get_providers.blacklist_log_movie') as log_movie:
         pool.return_value.providers = ['someprovider']
