@@ -8,6 +8,9 @@ import datetime
 import socket
 import traceback
 import time
+import copy
+import hashlib
+import threading
 import operator
 import unicodedata
 import itertools
@@ -16,10 +19,13 @@ import requests
 
 from os import scandir
 from collections import defaultdict
+from contextlib import contextmanager
 from bs4 import UnicodeDammit
 from babelfish import LanguageReverseError
 from guessit.jsonutils import GuessitEncoder
 from subliminal import refiner_manager
+from subliminal.cache import region
+from dogpile.cache.api import NO_VALUE
 from concurrent.futures import as_completed
 
 from .extensions import provider_registry
@@ -214,6 +220,80 @@ class _LanguageEquals(list):
                 break
 
 
+class _SearchResultsCache:
+    """Provider search results kept in the subtitles cache (subliminal's region) so a search already done for the
+    same file isn't sent to the provider again until it expires. Disabled while ttl is 0."""
+
+    _GENERATION_KEY = 'search_results_cache_generation'
+
+    def __init__(self):
+        self.ttl = 0
+        self._local = threading.local()
+
+    def configure(self, hours):
+        self.ttl = max(0, int(hours or 0)) * 3600
+
+    def key(self, provider, video, languages, provider_config):
+        generation = region.get(self._GENERATION_KEY, ignore_expiration=True)
+        parts = {
+            'generation': 0 if generation is NO_VALUE else generation,
+            'provider': provider,
+            'type': type(video).__name__,
+            'name': video.name,
+            'size': getattr(video, 'size', None),
+            'hashes': sorted((getattr(video, 'hashes', None) or {}).items()),
+            'languages': sorted(str(language) + (':hi' if getattr(language, 'hi', False) else '')
+                                for language in languages),
+            'config': sorted((str(k), repr(v)) for k, v in (provider_config or {}).items()),
+        }
+        digest = hashlib.sha1(json.dumps(parts, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+        return f'search_results.{provider}.{digest}'
+
+    def clear(self):
+        """Make every cached search result unreachable; the files are removed by the cache maintenance task."""
+        generation = region.get(self._GENERATION_KEY, ignore_expiration=True)
+        region.set(self._GENERATION_KEY, (0 if generation is NO_VALUE else generation) + 1)
+
+    # how long a failed download is remembered when search results aren't cached
+    _FAILED_DOWNLOAD_DEFAULT_TTL = 24 * 3600
+
+    @staticmethod
+    def _failed_download_key(subtitle):
+        return f'failed_download.{subtitle.provider_name}.{subtitle.id}'
+
+    def remember_failed_download(self, subtitle):
+        try:
+            region.set(self._failed_download_key(subtitle), time.time())
+        except Exception:
+            logger.debug("%r: Unable to remember the failed download", subtitle)
+
+    def failed_download(self, subtitle):
+        """Whether this subtitle's download failed recently (a manual search tries it again)."""
+        if self.bypassed():
+            return False
+        try:
+            failed_at = region.get(self._failed_download_key(subtitle),
+                                   expiration_time=self.ttl or self._FAILED_DOWNLOAD_DEFAULT_TTL)
+        except Exception:
+            return False
+        return failed_at is not NO_VALUE
+
+    def bypassed(self):
+        return getattr(self._local, 'bypass', 0) > 0
+
+    @contextmanager
+    def bypass(self):
+        """Search the providers (and refresh the cache) instead of using cached results, e.g. for manual searches."""
+        self._local.bypass = getattr(self._local, 'bypass', 0) + 1
+        try:
+            yield
+        finally:
+            self._local.bypass -= 1
+
+
+search_results_cache = _SearchResultsCache()
+
+
 class SZProviderPool(ProviderPool):
     def __init__(self, providers=None, provider_configs=None, blacklist=None, ban_list=None, throttle_callback=None,
                  pre_download_hook=None, post_download_hook=None, language_hook=None, language_equals=None):
@@ -378,7 +458,7 @@ class SZProviderPool(ProviderPool):
         logger.info('Listing subtitles with provider %r and languages %r', provider, to_request)
 
         try:
-            results = self[provider].list_subtitles(video, to_request)
+            results = self._list_provider_subtitles(provider, video, to_request)
             seen = []
             out = []
             for s in results:
@@ -411,6 +491,28 @@ class SZProviderPool(ProviderPool):
             }
             logger.exception('Unexpected error in provider %r: %s', provider, traceback.format_exc())
             self.throttle_callback(provider, e, ids=ids, language=list(languages)[0] if len(languages) else None)
+
+    def _list_provider_subtitles(self, provider, video, languages):
+        """Ask a provider for subtitles, reusing its answer for the same file, languages and provider settings from
+        the subtitles cache while search results caching is enabled."""
+        ttl = search_results_cache.ttl
+        if not ttl:
+            return self[provider].list_subtitles(video, languages)
+
+        key = search_results_cache.key(provider, video, languages, self.provider_configs.get(provider))
+        if not search_results_cache.bypassed():
+            cached = region.get(key, expiration_time=ttl)
+            if cached is not NO_VALUE:
+                logger.debug('Using cached search results of provider %r for %r', provider, video)
+                # scoring and downloading modify subtitles: never hand out the cached objects themselves
+                return copy.deepcopy(cached)
+
+        results = list(self[provider].list_subtitles(video, languages) or [])
+        try:
+            region.set(key, copy.deepcopy(results))
+        except Exception:
+            logger.debug('Unable to cache search results of provider %r', provider, exc_info=True)
+        return results
 
     def list_subtitles(self, video, languages):
         """List subtitles.
@@ -519,6 +621,9 @@ class SZProviderPool(ProviderPool):
         # check subtitle validity
         if not subtitle.is_valid():
             logger.error('Invalid subtitle')
+            # the provider answered but gave nothing usable (e.g. the subtitle was removed): don't try it again
+            # while the listing that offered it is reused
+            search_results_cache.remember_failed_download(subtitle)
             return False
 
         if not os.environ.get("SZ_KEEP_ENCODING", False):
@@ -622,6 +727,10 @@ class SZProviderPool(ProviderPool):
                     logger.debug("%r: Skipping subtitle with score %d, because it doesn't match our series/episode",
                                  subtitle, score)
                     continue
+
+            if search_results_cache.failed_download(subtitle):
+                logger.debug("%r: Skipping subtitle, its download recently failed", subtitle)
+                continue
 
             # make sure to preserve original subtitles format if requested
             subtitle.use_original_format = use_original_format

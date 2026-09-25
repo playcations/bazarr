@@ -8,6 +8,7 @@ interface Settings {
   sonarr: Settings.Sonarr;
   radarr: Settings.Radarr;
   backup: Settings.Backup;
+  cache: Settings.Cache;
   translator: Settings.Translator;
   // Anitcaptcha
   anticaptcha: Settings.Anticaptcha;
@@ -105,6 +106,12 @@ declare namespace Settings {
     port?: number;
     username?: string;
     password?: string;
+  }
+
+  interface Cache {
+    search_results_hours: number;
+    retention_days: number;
+    archive_retention_days: number;
   }
 
   interface Backup {

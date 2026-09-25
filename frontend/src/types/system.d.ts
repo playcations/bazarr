@@ -44,6 +44,11 @@ declare namespace System {
     cpu_cores: number;
   }
 
+  interface Cache {
+    files: number;
+    size: string;
+  }
+
   interface Backups {
     type: string;
     filename: string;
