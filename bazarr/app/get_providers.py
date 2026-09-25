@@ -465,7 +465,7 @@ def provider_throttle(name, exception, ids=None, language=None):
 
 def _retry_after(exception):
     """How long the provider asked us to wait, from a retry_after attribute or the Retry-After header of an HTTP
-    error response. Bounded between 30 seconds and one day."""
+    error response (None when it didn't say, so the provider's usual throttle applies)."""
     value = getattr(exception, 'retry_after', None)
     if value is None:
         response = getattr(exception, 'response', None)
@@ -485,7 +485,9 @@ def _retry_after(exception):
             retry_at = retry_at.replace(tzinfo=datetime.timezone.utc)
         seconds = (retry_at - datetime.datetime.now(datetime.timezone.utc)).total_seconds()
 
-    return datetime.timedelta(seconds=min(max(seconds, 30), 86400))
+    if seconds <= 0:
+        return None
+    return datetime.timedelta(seconds=seconds)
 
 
 def pretty_seconds(delta):

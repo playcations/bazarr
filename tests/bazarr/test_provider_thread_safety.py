@@ -104,8 +104,9 @@ class _HTTPError(Exception):
 
 @pytest.mark.parametrize("exception, expected", [
     (_HTTPError({"Retry-After": "120"}), 120),
-    (_HTTPError({"Retry-After": "1"}), 30),
-    (_HTTPError({"Retry-After": "999999"}), 86400),
+    (_HTTPError({"Retry-After": "1"}), 1),
+    (_HTTPError({"Retry-After": "90000"}), 90000),
+    (_HTTPError({"Retry-After": "0"}), None),
     (_HTTPError({}), None),
     (_HTTPError({"Retry-After": "soon"}), None),
     (type("E", (Exception,), {"retry_after": 300})(), 300),

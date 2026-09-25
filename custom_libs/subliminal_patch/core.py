@@ -65,6 +65,26 @@ HI_REGEX_WITH_PARENTHESIS = re.compile(r'[*¶♫♪].{3,}[*¶♫♪]|[\[\(\{].{3
 HI_REGEX_PARENTHESIS_EXCLUDED_LANGUAGES = ['ara', 'fas']
 
 
+def _hi_content_key(subtitle):
+    return f'hi_content.{subtitle.provider_name}.{subtitle.id}'
+
+
+def _known_hi_content(subtitle):
+    """Whether this subtitle was already downloaded and found to have hearing-impaired content (subtitles cache)."""
+    try:
+        return region.get(_hi_content_key(subtitle)) is True
+    except Exception:
+        return False
+
+
+def _remember_hi_content(subtitle):
+    # a subtitle's content doesn't change: don't download it again for requirements excluding HI
+    try:
+        region.set(_hi_content_key(subtitle), True)
+    except Exception:
+        logger.debug("%r: Unable to remember hearing-impaired content", subtitle)
+
+
 def _content_is_hi(subtitle):
     """Same detection save_subtitles uses to relabel a regular subtitle as hearing-impaired."""
     try:
@@ -786,9 +806,14 @@ class SZProviderPool(ProviderPool):
             # download
             logger.debug("%r: Trying to download subtitle with matches %s, score: %s; release(s): %s", subtitle,
                          matches, score, subtitle.release_info)
+            if reject_detected_hi and _known_hi_content(subtitle):
+                logger.debug("%r: Skipping subtitle, its content was already found to be hearing-impaired", subtitle)
+                continue
+
             if self.download_subtitle(subtitle):
                 if reject_detected_hi and _content_is_hi(subtitle):
                     logger.debug("%r: Skipping subtitle because its content is hearing-impaired", subtitle)
+                    _remember_hi_content(subtitle)
                     continue
                 subtitle.score = score
                 downloaded_subtitles.append(subtitle)
