@@ -23,6 +23,7 @@ from subliminal.exceptions import (ConfigurationError, ProviderError, DownloadLi
 from subliminal_patch.exceptions import APIThrottled
 from subliminal_patch.subtitle import Subtitle
 from subliminal.cache import region
+from subliminal_patch.core import search_results_cache
 from subliminal.subtitle import fix_line_ending
 from subliminal_patch.providers import Provider
 from subliminal_patch.providers import utils
@@ -190,8 +191,6 @@ class SubdlSubtitle(Subtitle):
 class SubdlProvider(Provider):
     """Subdl Provider"""
     server_hostname = 'api.subdl.com'
-    # packs kept whole (pack reuse) stay in the subtitles cache for the other episodes of the season
-    PACK_CACHE_TTL = 4 * 24 * 3600
 
     languages = {Language(*lang) for lang in list(language_converters['subdl'].to_subdl.keys())}
     languages.update(set(Language.rebuild(lang, forced=True) for lang in languages))
@@ -1071,7 +1070,8 @@ class SubdlProvider(Provider):
             # a pack kept whole is downloaded once for all of its episodes
             # concurrent requests for the same pack wait for a single download
             content = region.get_or_create(f'subdl.pack.{subtitle.download_link}', fetch,
-                                           expiration_time=self.PACK_CACHE_TTL,
+                                           # kept as long as Bazarr keeps downloaded archives
+                                           expiration_time=search_results_cache.archive_ttl,
                                            should_cache_fn=lambda value: bool(value))
         else:
             content = fetch()
