@@ -93,7 +93,8 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
                                                                          hearing_impaired=hi_mode,
                                                                          use_original_format=original_format in (1, "1", "True", True),
                                                                          fallback_allowed=fallback_allowed,
-                                                                         exclude_ids=saved_ids)
+                                                                         exclude_ids=saved_ids,
+                                                                         reject_detected_hi=_reject_detected_hi(hi_mode, subz_mods))
                         else:
                             downloaded_subtitles = download_best_subtitles(videos={video},
                                                                            languages={language},
@@ -101,7 +102,8 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
                                                                            min_score=int(min_score),
                                                                            hearing_impaired=hi_mode,
                                                                            use_original_format=original_format in (1, "1", "True", True),
-                                                                           fallback_allowed=fallback_allowed)
+                                                                           fallback_allowed=fallback_allowed,
+                                                                           reject_detected_hi=_reject_detected_hi(hi_mode, subz_mods))
                     except Exception as e:
                         logging.exception(f'BAZARR Error downloading Subtitles for this file {path}: {str(e)}')
                         return None
@@ -215,6 +217,12 @@ def _get_hi_mode(profile, language):
                 return "force non-HI"
             break
     return "don't prefer"
+
+
+def _reject_detected_hi(hi_mode, subz_mods):
+    # a subtitle with hearing-impaired content is saved as HI unless the remove_HI mod strips it, so it can't satisfy
+    # a requirement excluding HI and would only overwrite the HI subtitles
+    return hi_mode == "force non-HI" and 'remove_HI' not in (subz_mods or [])
 
 
 def _blacklist_unusable_subtitles(video, subtitles, media_type, language, failed_subtitle=None):
