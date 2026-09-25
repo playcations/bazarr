@@ -28,7 +28,8 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `fix/adaptive-search-failed-attempts` | multi-language failed-attempt lost update; providers throttled mid-search no longer count as a miss | development | done, tested | yes, small |
 | `fix/provider-throttle-pool-thread-safety` | locks for throttle state/pools/provider init, atomic `throttled_providers.dat`, no `eval()` | development | done, tested | yes, small |
 | `fix/hi-mode-profile-lookup` | HI mode taken from the wrong profile item when a profile has regular + HI for a language | development | done, tested | yes, small |
-| `feature/shared-provider-discovery` | FR2 | `fix/hi-mode-profile-lookup` | done, tested (needs live validation) | yes, after the HI fix |
+| `fix/exclude-hi-content-detection` | subtitles with HI content downloaded for HI-excluded requirements, relabeled HI on save and re-downloaded every run | development | done, tested | yes, small |
+| `feature/shared-provider-discovery` | FR2 | `fix/hi-mode-profile-lookup` + `fix/exclude-hi-content-detection` | done, tested (needs live validation) | yes, after the HI fix |
 | `feature/subtitle-pack-reuse` | FR1 (phase B stacked on FR2) | — | planned | yes, after FR2 |
 | `feature/parallel-wanted-scheduler` | FR3 | FR2 + both fix branches | done, tested, live A/B running | yes, after Discord discussion |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
