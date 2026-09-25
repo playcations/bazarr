@@ -200,3 +200,56 @@ def test_search_keeps_packs_whole_only_with_pack_reuse(monkeypatch, pack_reuse):
     else:
         assert subtitle.is_direct_file and subtitle.download_link == "/unpack/2"
         assert subtitle.pack_members is None
+
+
+def _season_pack(season, episodes, name, full=True):
+    return {"name": name, "url": f"/subtitle/{name}", "language": "EN", "releases": [name], "season": season,
+            "episode": None, "full_season": full, "episode_from": min(episodes), "episode_end": max(episodes),
+            "subtitlePage": f"/s/{name}",
+            "unpack_files": [{"name": f"Show.S{season:02d}E{e:02d}.srt", "episode": e, "season": season,
+                              "url": f"/unpack/{season}/{e}", "file_n_id": f"{season}{e}"} for e in episodes]}
+
+
+def _query(monkeypatch, items, season, episode, absolute=None, pack_reuse=True):
+    from subliminal.video import Episode
+
+    provider = SubdlProvider(api_key="key", pack_reuse=pack_reuse)
+    monkeypatch.setattr(provider, "_search", lambda params, description, paginate=False: (items, {}))
+    video = Episode(f"/tv/Show.S{season:02d}E{episode:02d}.mkv", "Show", season, episode)
+    video.absolute_episode = absolute
+    return provider.query({Language("eng")}, video)
+
+
+@pytest.mark.parametrize("pack_reuse", [True, False])
+def test_pack_of_another_season_is_never_used(monkeypatch, pack_reuse):
+    # Arrested Development S03E01 (absolute 41) was filled from the season 1 pack (episodes 1-22)
+    items = [_season_pack(1, range(1, 23), "show-first-season.zip"),
+             _season_pack(4, range(1, 11), "show-fourth-season.zip")]
+    assert _query(monkeypatch, items, season=3, episode=1, absolute=41, pack_reuse=pack_reuse) == []
+
+
+def test_pack_of_the_right_season_is_used(monkeypatch):
+    items = [_season_pack(3, range(1, 14), "show-third-season.zip")]
+    (subtitle,) = _query(monkeypatch, items, season=3, episode=1, absolute=41)
+    assert subtitle.is_pack and subtitle.pack_member == "Show.S03E01.srt"
+    assert subtitle.absolute_episode is None
+    assert "season" in subtitle.matches
+
+
+def test_anime_pack_matched_by_absolute_range_is_kept(monkeypatch):
+    # arc-based numbering: Sonarr S11E03 is absolute 266, the provider files it as season 9 episodes 264-275
+    item = _season_pack(9, range(264, 276), "anime-arc.zip", full=False)
+    item["unpack_files"] = [{"name": f"Anime - {e}.srt", "episode": e, "season": 0, "url": f"/u/{e}",
+                             "file_n_id": str(e)} for e in range(264, 276)]
+    (subtitle,) = _query(monkeypatch, [item], season=11, episode=3, absolute=266)
+    assert subtitle.is_pack and subtitle.absolute_episode == 266
+    assert "season" in subtitle.matches
+    # absolute numbering can't be used to fill other episodes
+    assert subtitle.pack_candidate_for(11, 4) is None
+
+
+def test_pack_member_named_for_another_season_is_not_used(monkeypatch):
+    item = _season_pack(2, range(1, 11), "mislabeled.zip")
+    item["unpack_files"] = [{"name": f"Show.S04E{e:02d}.srt", "episode": e, "season": 0, "url": f"/u/{e}",
+                             "file_n_id": str(e)} for e in range(1, 11)]
+    assert _query(monkeypatch, [item], season=2, episode=4) == []
