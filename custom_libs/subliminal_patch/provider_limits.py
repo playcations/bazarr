@@ -22,6 +22,10 @@ class _Lane:
         self.reserved = 0
         self.next_start = 0.0
         self.condition = threading.Condition()
+        # statistics: operations, seconds spent in the provider, seconds spent waiting for the lane
+        self.operations = 0
+        self.busy_seconds = 0.0
+        self.wait_seconds = 0.0
 
     def has_capacity(self):
         with self.condition:
@@ -133,13 +137,31 @@ class ProviderLimits:
             return
 
         lane = self._lane(provider)
+        waiting_since = time.monotonic()
         lane.acquire()
+        started = time.monotonic()
         held.add(provider)
         try:
             yield
         finally:
             held.discard(provider)
             lane.release()
+            with lane.condition:
+                lane.operations += 1
+                lane.busy_seconds += time.monotonic() - started
+                lane.wait_seconds += started - waiting_since
+
+    def stats(self):
+        """Per provider: (operations, average seconds per operation, average seconds waiting for the lane)."""
+        with self._lock:
+            lanes = dict(self._lanes)
+        result = {}
+        for name, lane in sorted(lanes.items()):
+            with lane.condition:
+                if lane.operations:
+                    result[name] = (lane.operations, round(lane.busy_seconds / lane.operations, 2),
+                                    round(lane.wait_seconds / lane.operations, 2))
+        return result
 
 
 provider_limits = ProviderLimits()

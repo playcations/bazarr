@@ -27,6 +27,8 @@ WHISPER_PROVIDER = 'whisperai'
 
 # how long to wait before checking again for a provider with free capacity
 _CAPACITY_POLL_SECONDS = 0.05
+# how often provider statistics are logged while a parallel search runs
+_STATS_INTERVAL_SECONDS = 300
 
 
 class ItemBusy(Exception):
@@ -73,14 +75,28 @@ def run_parallel_wanted(handler, rows, job_id):
 
     workers = max(1, int(settings.general.wanted_max_active_items))
     logging.info(f"BAZARR Searching {total} {handler.media_type} items with up to {workers} at a time")
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f'wanted_{handler.media_type}') as executor:
-        list(executor.map(work, rows))
+    finished = threading.Event()
+    reporter = threading.Thread(target=_report_provider_stats, args=(handler.media_type, finished), daemon=True)
+    reporter.start()
+    try:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix=f'wanted_{handler.media_type}') as executor:
+            list(executor.map(work, rows))
 
-        # items another job was already searching get one more chance once it's done
-        if busy_rows and not all_throttled.is_set():
-            list(executor.map(lambda row: work(row, retry_busy=False), busy_rows))
+            # items another job was already searching get one more chance once it's done
+            if busy_rows and not all_throttled.is_set():
+                list(executor.map(lambda row: work(row, retry_busy=False), busy_rows))
+    finally:
+        finished.set()
 
+    logging.info(f"BAZARR Parallel {handler.media_type} search done: {state['done']} of {total} items, provider "
+                 f"stats (operations, seconds per operation, seconds waiting): {provider_limits.stats()}")
     return all_throttled.is_set()
+
+
+def _report_provider_stats(media_type, finished):
+    while not finished.wait(_STATS_INTERVAL_SECONDS):
+        logging.info(f"BAZARR Parallel {media_type} search provider stats (operations, seconds per operation, "
+                     f"seconds waiting): {provider_limits.stats()}")
 
 
 def search_item(handler, item_id, wait_if_busy=False):
