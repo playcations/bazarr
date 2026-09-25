@@ -19,6 +19,7 @@ from app.jobs_queue import jobs_queue
 from app.event_handler import event_stream
 
 from ..download import generate_subtitles
+from subliminal_patch.core import search_results_cache
 
 
 def movies_download_subtitles(no, job_id=None, job_sub_function=False):
@@ -161,9 +162,11 @@ def movie_download_specific_subtitles(radarr_id, language, hi, forced, job_id=No
         audio_language = None
 
     try:
-        result = list(generate_subtitles(moviePath, [(language, hi, forced)], audio_language,
-                                         sceneName, title, 'movie', profile_id=get_profile_id(movie_id=radarr_id),
-                                         job_id=job_id))
+        # searching a specific language on demand asks the providers again
+        with search_results_cache.bypass():
+            result = list(generate_subtitles(moviePath, [(language, hi, forced)], audio_language,
+                                             sceneName, title, 'movie', profile_id=get_profile_id(movie_id=radarr_id),
+                                             job_id=job_id))
         if isinstance(result, list) and len(result):
             result = result[0]
             store_subtitles_movie(radarr_id)

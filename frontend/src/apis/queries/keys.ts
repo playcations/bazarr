@@ -18,6 +18,7 @@ export enum QueryKeys {
   Tasks = "tasks",
   Jobs = "jobs",
   Backups = "backups",
+  Cache = "cache",
   Logs = "logs",
   Infos = "infos",
   History = "history",
