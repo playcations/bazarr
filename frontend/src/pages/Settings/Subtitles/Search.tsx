@@ -4,6 +4,8 @@ import {
   CollapseBox,
   Layout,
   Message,
+  Number,
+  Password,
   Section,
   Selector,
   Slider,
@@ -87,6 +89,42 @@ const SettingsSubtitlesSearchView: FunctionComponent = () => {
             mode. If the media has been searched for more recently than this
             value, Bazarr will skip searching for subtitles.
           </Message>
+        </CollapseBox>
+        <Check
+          label="Only Want Forced Subtitles For Titles That Have Them"
+          settingKey="settings-general-forced_only_when_available"
+        ></Check>
+        <Message>
+          Forced subtitles only exist for titles with foreign-language parts.
+          Series and movies without any forced subtitle stop being wanted for
+          forced subtitles: those TMDB lists with a single spoken language, or
+          those already searched without finding any. They are wanted again as
+          soon as a forced subtitle is found for them.
+        </Message>
+        <CollapseBox settingKey="settings-general-forced_only_when_available">
+          <Check
+            label="Use TMDB Spoken Languages"
+            settingKey="settings-general-forced_evidence_use_tmdb"
+          ></Check>
+          <Message>
+            Titles where TMDB lists more than one spoken language keep wanting
+            forced subtitles, titles with a single one don't.
+          </Message>
+          <Number
+            label="Grace Period (Days)"
+            settingKey="settings-general-forced_evidence_grace_days"
+            min={0}
+            max={365}
+          ></Number>
+          <Message>
+            Without TMDB information, how long after forced subtitles were first
+            searched for a title before it stops wanting them.
+          </Message>
+          <Password
+            label="TMDB API Key (Optional)"
+            settingKey="settings-general-tmdb_api_key"
+          ></Password>
+          <Message>Leave empty to use the key bundled with Bazarr.</Message>
         </CollapseBox>
         <Check
           label="Search Enabled Providers Simultaneously"

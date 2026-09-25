@@ -139,6 +139,10 @@ validators = [
               is_in=['1w', '2w', '3w', '4w']),
     Validator('general.adaptive_searching_delta', must_exist=True, default='1w', is_type_of=str,
               is_in=['3d', '1w', '2w', '3w', '4w']),
+    Validator('general.forced_only_when_available', must_exist=True, default=False, is_type_of=bool),
+    Validator('general.forced_evidence_use_tmdb', must_exist=True, default=True, is_type_of=bool),
+    Validator('general.forced_evidence_grace_days', must_exist=True, default=7, is_type_of=int, gte=0, lte=365),
+    Validator('general.tmdb_api_key', must_exist=True, default='', is_type_of=str, cast=str),
     Validator('general.enabled_providers', must_exist=True, default=[], is_type_of=list),
     Validator('general.enabled_integrations', must_exist=True, default=[], is_type_of=list),
     Validator('general.multithreading', must_exist=True, default=True, is_type_of=bool),
@@ -601,7 +605,7 @@ array_keys = ['excluded_tags',
 
 empty_values = ['', 'None', 'null', 'undefined', None, []]
 
-str_keys = ['chmod', 'log_include_filter', 'log_exclude_filter', 'password', 'f_password', 'hashed_password']
+str_keys = ['chmod', 'tmdb_api_key', 'log_include_filter', 'log_exclude_filter', 'password', 'f_password', 'hashed_password']
 
 # Increase Sonarr and Radarr sync interval since we now use SignalR feed to update in real time
 if settings.sonarr.series_sync < 15:
@@ -753,7 +757,10 @@ def save_settings(settings_items):
         if key == 'settings-general-parse_embedded_audio_track':
             audio_tracks_parsing_changed = True
 
-        if key == 'settings-general-language_equals':
+        if key in ['settings-general-language_equals', 'settings-general-forced_only_when_available',
+                   'settings-general-forced_evidence_use_tmdb', 'settings-general-forced_evidence_grace_days',
+                   'settings-general-tmdb_api_key']:
+            # recompute missing subtitles
             language_equals_changed = True
 
         if key == 'settings-general-default_und_embedded_subtitles_lang':

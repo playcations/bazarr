@@ -48,6 +48,14 @@ describe("SettingsSubtitlesSearchView", () => {
     vitest.clearAllMocks();
   });
 
+  it("should render the forced subtitles evidence option", () => {
+    renderPage();
+
+    expect(
+      screen.getByText("Only Want Forced Subtitles For Titles That Have Them"),
+    ).toBeInTheDocument();
+  });
+
   it("should render expanded search sections", () => {
     renderPage();
 
