@@ -32,9 +32,14 @@ so run B works on a slightly harder remainder of the backlog; downloads per hour
 | C | B + statistics (stopped after 7 min) | 105 | 35 | 0 |
 | D | B + fastest-free-provider-first ordering | 478 | 185 | 79 + 12 = 91 |
 | E | D + 16 items/job, subdl:3, supersubtitles:2 | 608 | 277 | 165 + 27 = 192 |
+| F | E + exclude-HI content fix + wasted-save guard | 829 | 312 | 33 + 3 = 36 (0 re-downloads) |
 
 Every run starts at the beginning of the same Wanted order, so B–E first re-search the few hundred episodes the
 previous runs already searched without result; downloads per run are therefore conservative for later runs.
+
+Run E's downloads include 74 re-downloads of subtitles already present (the bug below); run F has none. By run F
+most of the searched episodes had already been searched by earlier runs, so its download count mostly reflects
+the new ~230 episodes; items searched per hour is the comparable metric (A: 258 episodes/h, F: 1,658 episodes/h).
 
 Findings:
 - Items that find nothing must try every provider, so throughput is bounded by the slowest single provider lane.
