@@ -20,6 +20,7 @@ import time
 
 import requests
 from subliminal import region
+from subliminal.cache import SHOW_EXPIRATION_TIME
 
 from app.config import settings
 from app.database import (database, select, TableEpisodes, TableEpisodesSubtitles, TableHistory, TableMovies,
@@ -28,8 +29,6 @@ from app.database import (database, select, TableEpisodes, TableEpisodesSubtitle
 # the TMDB key bundled with Bazarr (also used by the Wizdom provider), unless one is configured
 _BUNDLED_TMDB_API_KEY = 'a51ee051bcd762543373903de296e0a3'
 _TMDB_URL = 'https://api.themoviedb.org/3'
-# spoken languages rarely change: keep them in the subtitles cache for a month
-_TMDB_CACHE_SECONDS = 30 * 24 * 3600
 # after a TMDB error, don't try again for a while (a full recompute would otherwise wait on every title)
 _TMDB_BACKOFF_SECONDS = 600
 _tmdb_unavailable_until = 0.0
@@ -193,7 +192,7 @@ def _tmdb_spoken_languages(kind, external_id):
 
     try:
         return region.get_or_create(f'tmdb.spoken_languages.{kind}.{external_id}', fetch,
-                                    expiration_time=_TMDB_CACHE_SECONDS,
+                                    expiration_time=SHOW_EXPIRATION_TIME,
                                     should_cache_fn=lambda value: value is not None)
     except Exception:
         logging.debug('BAZARR unable to use the subtitles cache for TMDB spoken languages', exc_info=True)
