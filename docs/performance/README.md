@@ -14,6 +14,7 @@ proposed upstream. All options ship with defaults that preserve legacy behavior;
 | `features/fr1-subtitle-pack-reuse.md` | FR1 plan: reuse season packs across Wanted episodes. |
 | `features/fr3-parallel-wanted-scheduler.md` | FR3 plan: provider-lane parallel Wanted (first acceptable subtitle wins; upgrades find better ones). |
 | `upstream-watchlist.md` | Open upstream PRs/issues to reconsider later. |
+| `testing.md` | Local live test setup and A/B protocol. |
 
 Where a source document and a feature plan disagree, the feature plan (backed by the research file) wins.
 
@@ -29,7 +30,7 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `fix/hi-mode-profile-lookup` | HI mode taken from the wrong profile item when a profile has regular + HI for a language | development | done, tested | yes, small |
 | `feature/shared-provider-discovery` | FR2 | `fix/hi-mode-profile-lookup` | done, tested (needs live validation) | yes, after the HI fix |
 | `feature/subtitle-pack-reuse` | FR1 (phase B stacked on FR2) | — | planned | yes, after FR2 |
-| `feature/parallel-wanted-scheduler` | FR3 | — | planned | yes, after Discord discussion |
+| `feature/parallel-wanted-scheduler` | FR3 | FR2 + both fix branches | done, tested, live A/B running | yes, after Discord discussion |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
 Implementation order: fix branches → FR2 → FR1 → FR3.
