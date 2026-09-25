@@ -18,6 +18,7 @@ proposed upstream. All options ship with defaults that preserve legacy behavior;
 | `research/provider-audit-2026-09-25.md` | Per-provider audit for FR1–FR3, Gestdown deep-dive. |
 | `deploy/` | Running the integration build on the TrueNAS server (image, custom app, rollback). |
 | `features/search-cache.md` | Search results reuse through the existing subtitles cache, cache settings. |
+| `features/forced-only-when-available.md` | Forced subtitles only wanted for titles that have them (evidence, TMDB spoken languages). |
 
 Where a source document and a feature plan disagree, the feature plan (backed by the research file) wins.
 
@@ -40,6 +41,7 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `feature/subdl-season-search-cache` | SubDL season-only/title-only searches in the subtitles cache | development | done, tested | yes |
 | `feature/forced-only-search-interval` | forced-only requirements searched every N days | development | done, tested, live | yes |
 | `feature/cache-settings` | search results reuse in the existing subtitles cache, configurable cache retention, cache UI/API, thread-safe backend | development | done, tested, live | yes |
+| `feature/forced-only-when-available` | forced subtitles only wanted for titles with forced evidence or several TMDB spoken languages | development | done, tested, live | yes |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
 Implementation order: fix branches → FR2 → FR1 → FR3.
@@ -56,7 +58,7 @@ pretty-quick and stylelint.
 | FR2 | `general.shared_provider_discovery` | Subtitles → Search |
 | FR1 | `general.pack_reuse` | Subtitles → Search ("Subtitle packs") |
 | Cache | `cache.search_results_hours`, `cache.retention_days`, `cache.archive_retention_days` | Scheduler → Cache |
-| Forced | `general.forced_only_search_days` | Subtitles → Search (Performance) |
+| Forced | `general.forced_only_search_days`, `general.forced_only_when_available`, `general.forced_evidence_use_tmdb`, `general.forced_evidence_grace_days`, `general.tmdb_api_key` | Subtitles → Search (Performance) |
 | FR3 | `general.wanted_parallel_enabled`, `general.wanted_max_active_items`, `general.provider_default_max_in_flight`, `general.provider_limits`, `general.local_io_max_in_flight`, (`general.persistence_batching`) | Subtitles → Search ("Wanted performance"), Providers → Advanced |
 
 Per setting the work is: `Validator` in `bazarr/app/config.py`; type in `frontend/src/types/settings.d.ts`; component
