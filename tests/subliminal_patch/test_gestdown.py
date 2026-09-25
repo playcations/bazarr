@@ -6,6 +6,15 @@ from subliminal_patch.providers.gestdown import GestdownSubtitle
 from subzero.language import Language
 
 
+@pytest.fixture(autouse=True)
+def fresh_cache():
+    """Show lookups and season listings are kept in the subtitles cache: every test starts with an empty one."""
+    from subliminal.cache import region
+
+    region.configure("dogpile.cache.memory", replace_existing_backend=True)
+    yield
+
+
 def test_language_list_is_convertible():
     converter = PatchedAddic7edConverter()
     for language in GestdownProvider.languages:
