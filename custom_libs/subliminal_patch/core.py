@@ -286,6 +286,30 @@ class _SearchResultsCache:
         generation = region.get(self._GENERATION_KEY, ignore_expiration=True)
         region.set(self._GENERATION_KEY, (0 if generation is NO_VALUE else generation) + 1)
 
+    # how long a failed download is remembered when search results aren't cached
+    _FAILED_DOWNLOAD_DEFAULT_TTL = 24 * 3600
+
+    @staticmethod
+    def _failed_download_key(subtitle):
+        return f'failed_download.{subtitle.provider_name}.{subtitle.id}'
+
+    def remember_failed_download(self, subtitle):
+        try:
+            region.set(self._failed_download_key(subtitle), time.time())
+        except Exception:
+            logger.debug("%r: Unable to remember the failed download", subtitle)
+
+    def failed_download(self, subtitle):
+        """Whether this subtitle's download failed recently (a manual search tries it again)."""
+        if self.bypassed():
+            return False
+        try:
+            failed_at = region.get(self._failed_download_key(subtitle),
+                                   expiration_time=self.ttl or self._FAILED_DOWNLOAD_DEFAULT_TTL)
+        except Exception:
+            return False
+        return failed_at is not NO_VALUE
+
     def bypassed(self):
         return getattr(self._local, 'bypass', 0) > 0
 
@@ -661,6 +685,9 @@ class SZProviderPool(ProviderPool):
         # check subtitle validity
         if not subtitle.is_valid():
             logger.error('Invalid subtitle')
+            # the provider answered but gave nothing usable (e.g. the subtitle was removed): don't try it again
+            # while the listing that offered it is reused
+            search_results_cache.remember_failed_download(subtitle)
             return False
 
         if not os.environ.get("SZ_KEEP_ENCODING", False):
@@ -766,6 +793,10 @@ class SZProviderPool(ProviderPool):
                     logger.debug("%r: Skipping subtitle with score %d, because it doesn't match our series/episode",
                                  subtitle, score)
                     continue
+
+            if search_results_cache.failed_download(subtitle):
+                logger.debug("%r: Skipping subtitle, its download recently failed", subtitle)
+                continue
 
             # make sure to preserve original subtitles format if requested
             subtitle.use_original_format = use_original_format
