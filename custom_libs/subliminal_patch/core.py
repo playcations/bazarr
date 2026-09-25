@@ -260,10 +260,13 @@ class _SearchResultsCache:
 
     def __init__(self):
         self.ttl = 0
+        # how long downloaded archives are kept (Bazarr's cache archive retention)
+        self.archive_ttl = None
         self._local = threading.local()
 
-    def configure(self, hours):
+    def configure(self, hours, archive_days=None):
         self.ttl = max(0, int(hours or 0)) * 3600
+        self.archive_ttl = int(archive_days) * 86400 if archive_days else None
 
     def key(self, provider, video, languages, provider_config):
         generation = region.get(self._GENERATION_KEY, ignore_expiration=True)
@@ -286,14 +289,14 @@ class _SearchResultsCache:
         generation = region.get(self._GENERATION_KEY, ignore_expiration=True)
         region.set(self._GENERATION_KEY, (0 if generation is NO_VALUE else generation) + 1)
 
-    # how long a failed download is remembered when search results aren't cached
-    _FAILED_DOWNLOAD_DEFAULT_TTL = 24 * 3600
-
     @staticmethod
     def _failed_download_key(subtitle):
         return f'failed_download.{subtitle.provider_name}.{subtitle.id}'
 
     def remember_failed_download(self, subtitle):
+        # remembered as long as the search results that offered it (not at all when they aren't reused)
+        if not self.ttl:
+            return
         try:
             region.set(self._failed_download_key(subtitle), time.time())
         except Exception:
@@ -301,11 +304,10 @@ class _SearchResultsCache:
 
     def failed_download(self, subtitle):
         """Whether this subtitle's download failed recently (a manual search tries it again)."""
-        if self.bypassed():
+        if self.bypassed() or not self.ttl:
             return False
         try:
-            failed_at = region.get(self._failed_download_key(subtitle),
-                                   expiration_time=self.ttl or self._FAILED_DOWNLOAD_DEFAULT_TTL)
+            failed_at = region.get(self._failed_download_key(subtitle), expiration_time=self.ttl)
         except Exception:
             return False
         return failed_at is not NO_VALUE

@@ -800,7 +800,7 @@ def save_settings(settings_items):
         if key == 'settings-general-debug':
             configure_debug = True
 
-        if key == 'settings-cache-search_results_hours':
+        if key in ['settings-cache-search_results_hours', 'settings-cache-archive_retention_days']:
             cache_settings_changed = True
 
         if key == 'settings-general-hi_extension':
