@@ -28,7 +28,10 @@ from .processing import process_subtitle
 @update_pools
 def generate_subtitles(path, languages, audio_language, sceneName, title, media_type, profile_id,
                        forced_minimum_score=None, is_upgrade=False, check_if_still_required=False,
-                       previous_subtitles_to_delete=None, job_id=None, fallback_allowed=False):
+                       previous_subtitles_to_delete=None, job_id=None, fallback_allowed=False,
+                       only_providers=None, video_cache=None):
+    """only_providers: search only these providers of the pool (implies shared provider discovery).
+    video_cache: dict reused between calls for the same file so the video is only prepared and hashed once."""
     if not languages:
         return None
 
@@ -50,7 +53,12 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
     _set_forced_providers(pool=pool, also_forced=also_forced, forced_required=forced_required)
 
     try:
-        video = get_video(force_unicode(path), title, sceneName, providers=providers, media_type=media_type)
+        if video_cache is not None and path in video_cache:
+            video = video_cache[path]
+        else:
+            video = get_video(force_unicode(path), title, sceneName, providers=providers, media_type=media_type)
+            if video_cache is not None:
+                video_cache[path] = video
     except ValueError as e:
         logging.exception(f'BAZARR Unable to get video object for {path}: {e}')
         return None
@@ -63,7 +71,7 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
         subz_mods = get_array_from(settings.general.subzero_mods)
         saved_any = False
 
-        shared_discovery = settings.general.shared_provider_discovery
+        shared_discovery = settings.general.shared_provider_discovery or only_providers is not None
         if shared_discovery:
             language_set = _sort_by_profile(language_set, profile)
         # candidates listed once per hearing-impaired group, see _list_shared_candidates
@@ -87,7 +95,7 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
                     try:
                         if shared_discovery:
                             candidates = _list_shared_candidates(shared_candidates, video, language, language_set,
-                                                                 still_missing, pool)
+                                                                 still_missing, pool, only_providers)
                             downloaded_subtitles = select_best_subtitles(candidates, video, language, pool,
                                                                          min_score=int(min_score),
                                                                          hearing_impaired=hi_mode,
@@ -175,7 +183,8 @@ def generate_subtitles(path, languages, audio_language, sceneName, title, media_
     logging.debug(f'BAZARR Ended searching Subtitles for file: {path}')
 
 
-def _list_shared_candidates(shared_candidates, video, language, language_set, still_missing, pool):
+def _list_shared_candidates(shared_candidates, video, language, language_set, still_missing, pool,
+                            only_providers=None):
     """List the providers once for every requirement of the same hearing-impaired group as language.
 
     Providers filter hearing-impaired results differently depending on the languages they are asked for, so regular
@@ -185,7 +194,7 @@ def _list_shared_candidates(shared_candidates, video, language, language_set, st
     if group not in shared_candidates:
         group_languages = {x for x in language_set
                            if bool(x.hi) == group and (still_missing is None or x in still_missing)}
-        shared_candidates[group] = list_candidates(video, group_languages, pool)
+        shared_candidates[group] = list_candidates(video, group_languages, pool, providers=only_providers)
     return shared_candidates[group]
 
 

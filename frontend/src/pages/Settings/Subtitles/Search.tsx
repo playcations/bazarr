@@ -1,9 +1,11 @@
 import { FunctionComponent } from "react";
 import {
   Check,
+  Chips,
   CollapseBox,
   Layout,
   Message,
+  Number,
   Section,
   Selector,
   Slider,
@@ -115,6 +117,57 @@ const SettingsSubtitlesSearchView: FunctionComponent = () => {
           hard disk drive from waking up. However, this may decrease your search
           results scores.
         </Message>
+      </Section>
+      <Section header="Wanted Performance">
+        <Check
+          label="Search Multiple Wanted Items At Once"
+          settingKey="settings-general-wanted_parallel_enabled"
+        ></Check>
+        <Message>
+          Search several wanted episodes and movies at the same time, each one
+          provider at a time, keeping the first subtitle that meets the minimum
+          score instead of waiting for every provider. Better subtitles are
+          found later by "Upgrade Previously Downloaded Subtitles", which should
+          be enabled. Provider limits below apply to every search while this is
+          enabled.
+        </Message>
+        <CollapseBox settingKey="settings-general-wanted_parallel_enabled">
+          <Number
+            label="Items Searched At Once"
+            settingKey="settings-general-wanted_max_active_items"
+            min={1}
+            max={64}
+          ></Number>
+          <Message>
+            Maximum number of wanted episodes or movies being searched at the
+            same time by each wanted job. Concurrent Jobs limits jobs, not items
+            or provider requests.
+          </Message>
+          <Number
+            label="Default Simultaneous Requests Per Provider"
+            settingKey="settings-general-provider_default_max_in_flight"
+            min={1}
+            max={16}
+          ></Number>
+          <Message>
+            How many searches or downloads a provider can handle at once, unless
+            overridden below. Keep it at 1 for providers with strict limits.
+          </Message>
+          <Chips
+            label="Provider Limits"
+            settingKey="settings-general-provider_limits"
+            sanitizeFn={(values: string[] | null) =>
+              values?.map((item) =>
+                item.replace(/[^a-z0-9_:]/gi, "").toLowerCase(),
+              )
+            }
+          ></Chips>
+          <Message>
+            Per provider overrides written as provider:requests or
+            provider:requests:milliseconds between requests, for example
+            gestdown:2 or tvsubtitles:1:2000.
+          </Message>
+        </CollapseBox>
       </Section>
     </Layout>
   );
