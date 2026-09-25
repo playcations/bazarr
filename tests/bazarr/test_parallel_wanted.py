@@ -107,6 +107,8 @@ class FakeHandler:
         self.peak_items = 0
         self.searches = []
         self.stamped = {}
+        # (item, provider) -> subtitles saved that don't satisfy any requirement
+        self.relabeled = {}
 
     def load(self, item_id, refresh_index=True):
         return SimpleNamespace(id=item_id, path=f"/tv/{item_id}.mkv", missing=list(self.missing[item_id]))
@@ -128,12 +130,13 @@ class FakeHandler:
         with provider_limits.slot(provider):
             time.sleep(self.delay)
         found = [x for x in self.catalog.get((item.id, provider), []) if x in languages]
+        saved_without_satisfying = self.relabeled.get((item.id, provider), 0)
         with self.lock:
             for language in found:
                 self.missing[item.id].remove(language)
             self.active_items.discard(item.id)
             self.active_providers[provider] -= 1
-        return bool(found)
+        return len(found) + saved_without_satisfying
 
     def stamp(self, item, languages):
         self.stamped[item.id] = list(languages)
@@ -291,3 +294,13 @@ def test_fast_providers_are_tried_first():
         assert parallel._reserve_provider(["supersubtitles", "gestdown"])[0] == "gestdown"
     finally:
         provider_limits.configure(False)
+
+
+def test_saved_subtitle_not_satisfying_the_language_stops_the_item(runner):
+    handler = FakeHandler({1: ["en"]}, {})
+    handler.relabeled[(1, "gestdown")] = 1
+
+    runner(handler, [1], ["gestdown", "subdl", "opensubtitlescom"])
+
+    assert handler.searches == [(1, "gestdown")]
+    assert handler.stamped == {}

@@ -41,7 +41,7 @@ def _episode_due_languages(episode):
 
 def _search_episode(episode, languages, job_id=None, fallback_allowed=False, only_providers=None,
                     video_cache=None):
-    """Search and save subtitles for these languages of the episode. Returns True if anything was saved."""
+    """Search and save subtitles for these languages of the episode. Returns how many subtitles were saved."""
     audio_language_list = get_audio_profile_languages(episode.audio_language)
     if len(audio_language_list) > 0:
         audio_language = audio_language_list[0]['name']
@@ -52,7 +52,7 @@ def _search_episode(episode, languages, job_id=None, fallback_allowed=False, onl
                         "True" if language.endswith(':hi') else "False",
                         "True" if language.endswith(':forced') else "False") for language in languages]
 
-    found_any = False
+    saved = 0
     for result in generate_subtitles(path_mappings.path_replace(episode.path),
                                      language_tuples,
                                      audio_language,
@@ -66,13 +66,13 @@ def _search_episode(episode, languages, job_id=None, fallback_allowed=False, onl
                                      only_providers=only_providers,
                                      video_cache=video_cache):
         if result:
-            found_any = True
+            saved += 1
             store_subtitles(episode.sonarrEpisodeId)
             history_log(1, episode.sonarrSeriesId, episode.sonarrEpisodeId, result)
             send_notifications(episode.sonarrSeriesId, episode.sonarrEpisodeId, result.message)
             event_stream(type='series', action='update', payload=episode.sonarrSeriesId)
             event_stream(type='episode-wanted', action='delete', payload=episode.sonarrEpisodeId)
-    return found_any
+    return saved
 
 
 def _stamp_episode_attempts(episode, languages):

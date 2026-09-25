@@ -127,12 +127,19 @@ def search_item(handler, item_id, wait_if_busy=False):
             provider, reservation = _reserve_provider(candidates)
             tried.add(provider)
             try:
-                found = handler.search(item, remaining, only_providers={provider}, video_cache=video_cache)
+                saved = handler.search(item, remaining, only_providers={provider}, video_cache=video_cache)
             finally:
                 provider_limits.unreserve(reservation)
-            if found:
+            if saved:
                 item = handler.load(item_id, refresh_index=False)
-                remaining = _still_missing(handler, item, searched_languages)
+                still_missing = _still_missing(handler, item, searched_languages)
+                if saved > len(remaining) - len(still_missing):
+                    # something was saved without satisfying the language it was downloaded for (e.g. relabeled as
+                    # hearing-impaired): other providers would likely do the same, don't download it again
+                    logging.debug(f"BAZARR {provider} saved subtitles for {item.path if item else item_id} that "
+                                  f"didn't satisfy the missing languages, stopping this search")
+                    return
+                remaining = still_missing
 
         # whisper only transcribes once the regular providers couldn't find anything
         if remaining and use_fallback and WHISPER_PROVIDER in (get_providers() or []):

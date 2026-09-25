@@ -70,6 +70,7 @@ def select_best_subtitles(
     use_original_format=False,
     fallback_allowed=False,
     exclude_ids=None,
+    reject_detected_hi=False,
 ):
     """Download the best subtitles for a single language out of candidates previously listed with list_candidates.
 
@@ -104,6 +105,7 @@ def select_best_subtitles(
         hearing_impaired=hearing_impaired,
         use_original_format=use_original_format,
         fallback_allowed=fallback_allowed,
+        reject_detected_hi=reject_detected_hi,
     )
     logger.info("Downloaded %d subtitle(s)", len(subtitles))
     downloaded_subtitles[video].extend(subtitles)
@@ -120,6 +122,7 @@ def download_best_subtitles(
     only_one=False,
     use_original_format=False,
     fallback_allowed=False,
+    reject_detected_hi=False,
     **kwargs
 ):
     downloaded_subtitles = defaultdict(list)
@@ -148,6 +151,7 @@ def download_best_subtitles(
             only_one=only_one,
             use_original_format=use_original_format,
             fallback_allowed=fallback_allowed,
+            reject_detected_hi=reject_detected_hi,
         )
         logger.info("Downloaded %d subtitle(s)", len(subtitles))
         downloaded_subtitles[video].extend(subtitles)
