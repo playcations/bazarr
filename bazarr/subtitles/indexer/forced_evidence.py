@@ -9,8 +9,8 @@ or external, and forced subtitles in history) versus what was searched without r
   they were searched for it longer than the grace period ago;
 - an episode of a series TMDB lists with a single spoken language and without any forced subtitle doesn't need them;
 - otherwise every episode is searched once; an episode searched longer than the grace period ago without result keeps
-  wanting forced subtitles only if the series needs them throughout: enough of its checked episodes (at least
-  MIN_EPISODES_CHECKED, a share of at least general.forced_series_ratio percent) have forced subtitles.
+  wanting forced subtitles only if the series needs them throughout: at least general.forced_series_ratio percent of
+  its checked episodes have forced subtitles.
 Whatever doesn't need them gets the forced requirement left out of its missing subtitles, so it isn't wanted.
 """
 
@@ -20,6 +20,7 @@ import time
 
 import requests
 from subliminal import region
+from subliminal_patch.http import RetryingSession
 from subliminal.cache import SHOW_EXPIRATION_TIME
 
 from app.config import settings
@@ -33,10 +34,6 @@ _TMDB_URL = 'https://api.themoviedb.org/3'
 
 def enabled():
     return bool(settings.general.forced_only_when_available)
-
-
-# a series needs forced subtitles throughout only when at least this many of its episodes were checked
-MIN_EPISODES_CHECKED = 4
 
 
 class ForcedNeeds:
@@ -74,8 +71,9 @@ class ForcedNeeds:
         if first is None or first > self.searched_before:
             # search every episode once (and let providers catch up during the grace period)
             return False
+        # every episode gets searched once, so the share settles as the series is checked
         checked = len(found | set(searched))
-        return not (checked >= MIN_EPISODES_CHECKED and len(found) / checked >= self.series_ratio)
+        return len(found) / checked < self.series_ratio
 
 
 _NOTHING_TO_SKIP = ForcedNeeds()
@@ -151,24 +149,30 @@ def _spoken_languages(media_type, ids):
         lookups = {row[0]: ('movie', row[1]) for row in rows if row[1]}
 
     spoken = {}
+    session = RetryingSession()
     for media_id, (kind, external_id) in lookups.items():
-        languages = _tmdb_spoken_languages(kind, external_id)
+        languages = _tmdb_spoken_languages(kind, external_id, session=session)
         if languages is None:
             # TMDB isn't answering: don't make every title of this recompute wait on it, the next one tries again
             break
         if languages:
             spoken[media_id] = languages
+    session.close()
+    # lookups done outside of a subtitles search: write them to the subtitles cache now
+    region.backend.sync()
     return spoken
 
 
-def _tmdb_spoken_languages(kind, external_id):
+def _tmdb_spoken_languages(kind, external_id, session=None):
     """Spoken languages of a TMDB movie (by TMDB id) or tv show (by TVDB id); [] when unknown, None on errors."""
+    session = session or RetryingSession()
+
     def fetch():
         api_key = settings.general.tmdb_api_key or _BUNDLED_TMDB_API_KEY
         try:
             if kind == 'tv':
-                response = requests.get(f'{_TMDB_URL}/find/{external_id}',
-                                        params={'api_key': api_key, 'external_source': 'tvdb_id'}, timeout=5)
+                response = session.get(f'{_TMDB_URL}/find/{external_id}',
+                                       params={'api_key': api_key, 'external_source': 'tvdb_id'})
                 response.raise_for_status()
                 results = response.json().get('tv_results') or []
                 if not results:
@@ -176,7 +180,7 @@ def _tmdb_spoken_languages(kind, external_id):
                 url = f"{_TMDB_URL}/tv/{results[0]['id']}"
             else:
                 url = f'{_TMDB_URL}/movie/{external_id}'
-            response = requests.get(url, params={'api_key': api_key}, timeout=5)
+            response = session.get(url, params={'api_key': api_key})
             if response.status_code == 404:
                 return []
             response.raise_for_status()
