@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import logging
-import time
 
 from requests import JSONDecodeError
 from requests import Session
