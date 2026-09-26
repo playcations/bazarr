@@ -2,7 +2,8 @@
 
 Branch: `feature/forced-only-when-available` (from `development`). Status: implemented, unit tested, live on the NAS.
 
-Nothing in Sonarr, Radarr or TMDB says which episodes have foreign-language parts (TMDB only has show-level
+Nothing in Sonarr, Radarr, TMDB or TVDB (v4 API: episode records only carry name/overview translations; series only
+`originalLanguage`) or Gestdown says which episodes have foreign-language parts (TMDB only has show-level
 `spoken_languages`; episode and season objects have no language data), so the indexer
 (`subtitles/indexer/forced_evidence.py`, used by `list_missing_subtitles` for series and movies) learns it from what
 is found (indexed forced subtitles, embedded or external, and forced subtitles in history) versus episodes searched
