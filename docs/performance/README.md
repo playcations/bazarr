@@ -39,7 +39,6 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `fix/opensubtitlescom-concurrent-searches` | OpenSubtitles results scored against another video when searches overlap | development | done, tested | yes, small |
 | `feature/gestdown-season-cache` | Gestdown whole-season listings and show lookups in the subtitles cache, 429/Retry-After handling | development | done, tested (live API) | yes |
 | `feature/subdl-season-search-cache` | SubDL season-only/title-only searches in the subtitles cache | development | done, tested | yes |
-| `feature/forced-only-search-interval` | forced-only requirements searched every N days | development | done, tested, live | yes |
 | `feature/cache-settings` | search results reuse in the existing subtitles cache, configurable cache retention, cache UI/API, thread-safe backend | development | done, tested, live | yes |
 | `feature/forced-only-when-available` | forced subtitles only wanted for titles with forced evidence or several TMDB spoken languages | development | done, tested, live | yes |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
@@ -58,7 +57,7 @@ pretty-quick and stylelint.
 | FR2 | `general.shared_provider_discovery` | Subtitles → Search |
 | FR1 | `general.pack_reuse` | Subtitles → Search ("Subtitle packs") |
 | Cache | `cache.search_results_hours`, `cache.retention_days`, `cache.archive_retention_days` | Scheduler → Cache |
-| Forced | `general.forced_only_search_days`, `general.forced_only_when_available`, `general.forced_evidence_use_tmdb`, `general.forced_evidence_grace_days`, `general.tmdb_api_key` | Subtitles → Search (Performance) |
+| Forced | `general.forced_only_when_available`, `general.forced_evidence_use_tmdb`, `general.forced_evidence_grace_days`, `general.tmdb_api_key` | Subtitles → Search (Performance) |
 | FR3 | `general.wanted_parallel_enabled`, `general.wanted_max_active_items`, `general.provider_default_max_in_flight`, `general.provider_limits`, `general.local_io_max_in_flight`, (`general.persistence_batching`) | Subtitles → Search ("Wanted performance"), Providers → Advanced |
 
 Per setting the work is: `Validator` in `bazarr/app/config.py`; type in `frontend/src/types/settings.d.ts`; component
