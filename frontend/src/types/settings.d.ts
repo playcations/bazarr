@@ -56,7 +56,6 @@ declare namespace Settings {
     provider_default_max_in_flight: number;
     provider_limits: string[];
     pack_reuse: boolean;
-    forced_only_search_days: number;
     forced_only_when_available: boolean;
     forced_evidence_use_tmdb: boolean;
     forced_evidence_grace_days: number;

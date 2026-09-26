@@ -72,14 +72,6 @@ describe("SettingsSubtitlesSearchView", () => {
     ).toBeInTheDocument();
   });
 
-  it("should render the forced-only search option", () => {
-    renderPage();
-
-    expect(
-      screen.getByText("Search For Forced-Only Subtitles"),
-    ).toBeInTheDocument();
-  });
-
   it("should render the forced subtitles evidence option", () => {
     renderPage();
 

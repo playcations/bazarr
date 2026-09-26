@@ -84,26 +84,3 @@ export const adaptiveSearchingDeltaOption: SelectorOption<string>[] = [
     value: "4w",
   },
 ];
-
-export const forcedOnlySearchOption: SelectorOption<number>[] = [
-  {
-    label: "Every search",
-    value: 0,
-  },
-  {
-    label: "Weekly",
-    value: 7,
-  },
-  {
-    label: "Monthly",
-    value: 30,
-  },
-  {
-    label: "Every 3 months",
-    value: 90,
-  },
-  {
-    label: "Only once",
-    value: -1,
-  },
-];

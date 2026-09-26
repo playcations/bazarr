@@ -18,7 +18,7 @@ from app.event_handler import event_stream
 from app.jobs_queue import jobs_queue
 from app.config import settings
 
-from ..adaptive_searching import is_search_active, updateFailedAttempts, filter_forced_only_languages
+from ..adaptive_searching import is_search_active, updateFailedAttempts
 from ..download import generate_subtitles
 from ..locks import media_lock
 from .parallel import run_parallel_wanted
@@ -33,7 +33,7 @@ def _movie_due_languages(movie):
         else:
             logging.info(f"BAZARR Search is throttled by adaptive search for this movie {movie.path} and "
                          f"language: {language}")
-    return filter_forced_only_languages(languages, movie.failedAttempts)
+    return languages
 
 
 def _search_movie(movie, languages, job_id=None, fallback_allowed=False, only_providers=None, video_cache=None):
