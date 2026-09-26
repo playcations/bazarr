@@ -23,7 +23,7 @@ TMDB answers are kept in the existing subtitles cache for 30 days; errors back o
 Bazarr's bundled TMDB key unless `general.tmdb_api_key` is set. Changing the settings recomputes missing subtitles.
 Settings (Subtitles → Search → Performance): `forced_only_when_available` (off by default), `forced_evidence_use_tmdb`
 (on), `forced_evidence_grace_days` (7; live instance uses 1), `forced_series_ratio` (25), `tmdb_api_key` (optional).
-Complements `feature/forced-only-search-interval`, which only reduces how often forced-only requirements are searched.
+How often the remaining forced requirements are retried is left to Bazarr's adaptive searching.
 
 ## Live result (2026-09-25)
 Wanted episodes 6,631 → 2,800 and movies 617 → 181 after enabling (recompute took 220 s). Remaining: 1,673 episodes
