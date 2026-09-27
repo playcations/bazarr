@@ -12,11 +12,11 @@ OLD = 0.0          # searched long before the grace period
 NOW = 10 ** 10     # searched too recently
 
 
-def _series(found, searched, spoken=None, ratio=0.25):
+def _series(found, searched, spoken=None):
     """Series 1: episodes with forced subtitles, {episode: first unsuccessful search}."""
     return ForcedNeeds(evidence={(1, "en"): set(found)} if found else {},
                        first_search={(1, "en"): dict(searched)},
-                       spoken={1: spoken} if spoken else {}, searched_before=1.0, series_ratio=ratio)
+                       spoken={1: spoken} if spoken else {}, searched_before=1.0)
 
 
 def test_single_language_series_without_forced_subtitles_doesnt_want_them():
@@ -30,43 +30,36 @@ def test_every_episode_is_searched_once_first():
     assert not _series(found=[1], searched={3: NOW}).not_needed(1, "en", episode_id=3)  # grace period
 
 
-def test_series_with_forced_in_a_single_episode_only_keeps_that_one():
-    # e.g. Arrested Development: 1 forced episode out of 84
-    needs = _series(found=[1], searched={e: OLD for e in range(2, 85)}, spoken=["en", "es"])
+def test_episodes_keep_forced_subtitles_only_where_found():
+    # e.g. Breaking Bad: 23 of 62 episodes have forced subtitles, the other episodes were searched without result
+    needs = _series(found=range(1, 24), searched={e: OLD for e in range(24, 63)}, spoken=["en", "de", "es"])
+    assert not needs.not_needed(1, "en", episode_id=10)
     assert needs.not_needed(1, "en", episode_id=40)
 
 
-def test_series_needing_forced_throughout_keeps_wanting_them():
-    # e.g. Breaking Bad: 23 of 62 episodes have forced subtitles (37%)
-    needs = _series(found=range(1, 24), searched={e: OLD for e in range(24, 63)}, spoken=["en", "de", "es"])
-    assert not needs.not_needed(1, "en", episode_id=40)
-    # with a stricter threshold it doesn't
-    assert _series(found=range(1, 24), searched={e: OLD for e in range(24, 63)}, ratio=0.5).not_needed(
-        1, "en", episode_id=40)
-
-
-def test_share_is_computed_over_the_checked_episodes():
-    # 1 of 2 checked episodes has forced subtitles: 50%, above the 25% threshold
-    needs = _series(found=[1], searched={2: OLD}, spoken=["en", "es"])
-    assert not needs.not_needed(1, "en", episode_id=2)
-
-
 def test_forced_subtitles_found_in_a_single_language_series_count():
-    needs = _series(found=[1, 2, 3], searched={4: OLD}, spoken=["en"])
+    needs = _series(found=[1, 2, 3], searched={4: NOW}, spoken=["en"])
+    assert not needs.not_needed(1, "en", episode_id=1)
+    # TMDB is wrong about this series, so its other episodes are searched once too
     assert not needs.not_needed(1, "en", episode_id=4)
+    assert not needs.not_needed(1, "en", episode_id=5)
 
 
-@pytest.mark.parametrize("spoken, expected", [(["en"], True), (["en", "es"], False)])
-def test_movies_follow_tmdb_spoken_languages(spoken, expected):
-    assert ForcedNeeds(spoken={7: spoken}).not_needed(7, "en") is expected
+def test_single_language_movie_doesnt_want_forced_subtitles():
+    assert ForcedNeeds(spoken={7: ["en"]}).not_needed(7, "en")
 
 
-def test_movies_with_forced_subtitles_or_searched_recently_keep_wanting_them():
-    assert not ForcedNeeds(evidence={(7, "en"): {None}}, spoken={7: ["en"]}).not_needed(7, "en")
-    needs = ForcedNeeds(first_search={(7, "en"): {None: 5.0}, (8, "en"): {None: NOW}}, searched_before=10.0)
-    assert needs.not_needed(7, "en")
-    assert not needs.not_needed(8, "en")
-    assert not needs.not_needed(9, "en")
+def test_movies_are_searched_once():
+    needs = ForcedNeeds(first_search={(7, "en"): {None: 5.0}, (8, "en"): {None: NOW}}, spoken={7: ["en", "es"]},
+                        searched_before=10.0)
+    assert needs.not_needed(7, "en")           # several spoken languages, searched without result
+    assert not needs.not_needed(8, "en")       # grace period
+    assert not needs.not_needed(9, "en")       # never searched
+
+
+def test_movies_with_forced_subtitles_keep_wanting_them():
+    assert not ForcedNeeds(evidence={(7, "en"): {None}}, spoken={7: ["en"]},
+                           first_search={(7, "en"): {None: 5.0}}, searched_before=10.0).not_needed(7, "en")
 
 
 @pytest.fixture
@@ -130,6 +123,5 @@ def test_disabled_leaves_everything(monkeypatch):
 def test_database_queries_run(monkeypatch, media_type):
     monkeypatch.setitem(forced_evidence.settings.general, "forced_only_when_available", True)
     monkeypatch.setitem(forced_evidence.settings.general, "forced_evidence_use_tmdb", False)
-    monkeypatch.setitem(forced_evidence.settings.general, "forced_series_ratio", 25)
     needs = forced_evidence.forced_needs(media_type, {123456})
     assert not needs.not_needed(123456, "en", episode_id=1 if media_type == "series" else None)

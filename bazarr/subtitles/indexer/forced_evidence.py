@@ -2,15 +2,12 @@
 
 """Decide which titles and episodes don't need forced subtitles.
 
-Forced subtitles only exist for titles with foreign-language parts, often only in a few episodes of a series. Nothing
-in Sonarr, Radarr or TMDB says which episodes, so it's learned from what is found (indexed forced subtitles, embedded
-or external, and forced subtitles in history) versus what was searched without result (failedAttempts):
-- a movie needs forced subtitles if it has any, else if TMDB lists more than one spoken language for it, else until
-  they were searched for it longer than the grace period ago;
-- an episode of a series TMDB lists with a single spoken language and without any forced subtitle doesn't need them;
-- otherwise every episode is searched once; an episode searched longer than the grace period ago without result keeps
-  wanting forced subtitles only if the series needs them throughout: at least general.forced_series_ratio percent of
-  its checked episodes have forced subtitles.
+Forced subtitles only exist for titles with foreign-language parts that the release translates, often only in a few
+episodes of a series, and nothing in Sonarr, Radarr or TMDB says which episodes. So every movie and episode is searched
+once and keeps what is found (indexed forced subtitles, embedded or external, and forced subtitles in history):
+- a movie or episode with a forced subtitle keeps wanting it;
+- a title TMDB lists with a single spoken language, without any forced subtitle, doesn't need them;
+- otherwise it's wanted until it was searched longer than the grace period ago without result (failedAttempts).
 Whatever doesn't need them gets the forced requirement left out of its missing subtitles, so it isn't wanted.
 """
 
@@ -37,43 +34,27 @@ def enabled():
 
 
 class ForcedNeeds:
-    def __init__(self, evidence=None, spoken=None, first_search=None, searched_before=0.0, series_ratio=0.25):
+    def __init__(self, evidence=None, spoken=None, first_search=None, searched_before=0.0):
         # {(title id, language): set of episode ids (series) or {None} (movies) with a forced subtitle}
         self.evidence = evidence or {}
         self.spoken = spoken or {}
         # {(title id, language): {episode id (series) or None (movies): first unsuccessful forced search timestamp}}
         self.first_search = first_search or {}
         self.searched_before = searched_before
-        self.series_ratio = series_ratio
 
     def not_needed(self, media_id, language, episode_id=None):
         """Whether forced subtitles in this alpha2 language can be left out for this movie, or this episode of the
         series when episode_id is given."""
         key = (media_id, language)
         found = self.evidence.get(key, set())
-        searched = self.first_search.get(key, {})
-
-        if episode_id is None:
-            if found:
-                return False
-            spoken = self.spoken.get(media_id)
-            if spoken:
-                return len(set(spoken)) < 2
-            first = min(searched.values()) if searched else None
-            return first is not None and first <= self.searched_before
-
         if episode_id in found:
             return False
         spoken = self.spoken.get(media_id)
         if not found and spoken and len(set(spoken)) < 2:
             return True
-        first = searched.get(episode_id)
-        if first is None or first > self.searched_before:
-            # search every episode once (and let providers catch up during the grace period)
-            return False
-        # every episode gets searched once, so the share settles as the series is checked
-        checked = len(found | set(searched))
-        return len(found) / checked < self.series_ratio
+        # searched once, and providers had the grace period to catch up
+        first = self.first_search.get(key, {}).get(episode_id)
+        return first is not None and first <= self.searched_before
 
 
 _NOTHING_TO_SKIP = ForcedNeeds()
@@ -133,8 +114,7 @@ def forced_needs(media_type, ids):
 
     spoken = _spoken_languages(media_type, ids) if settings.general.forced_evidence_use_tmdb else {}
     searched_before = time.time() - max(0, int(settings.general.forced_evidence_grace_days)) * 86400
-    return ForcedNeeds(evidence, spoken, first_search, searched_before,
-                       series_ratio=max(0, min(100, int(settings.general.forced_series_ratio))) / 100)
+    return ForcedNeeds(evidence, spoken, first_search, searched_before)
 
 
 def _spoken_languages(media_type, ids):
