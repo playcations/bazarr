@@ -1,7 +1,8 @@
 # Forced subtitles built from hearing impaired subtitles
 
-Branch: `feature/forced-from-hi-subtitles` (from `development`). Status: implemented, unit tested, checked read-only
-against the live library; provider disabled by default.
+Branch: `feature/forced-from-hi-subtitles` (from `development`). Status: **not merged into `integration/performance`**.
+Acceptance criterion (user, 2026-09-27): generated forced subtitles must match the real forced subtitles; the best
+version covers 28% of their lines, so it stays on its branch.
 
 Hearing impaired subtitles tag foreign-language speech. When the release translates it, the translation follows the
 tag (`[IN FRENCH] You called my mom.`); when it doesn't, only the tag is there (`[SPEAKING RUSSIAN]`), which means no

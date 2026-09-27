@@ -42,7 +42,7 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `feature/subdl-season-search-cache` | SubDL season-only/title-only searches in the subtitles cache | development | done, tested | yes |
 | `feature/cache-settings` | search results reuse in the existing subtitles cache, configurable cache retention, cache UI/API, thread-safe backend | development | done, tested, live | yes |
 | `feature/forced-only-when-available` | forced subtitles wanted per movie/episode until searched once (kept where found, skipped for single-language titles on TMDB) | development | done, tested, live | yes |
-| `feature/forced-from-hi-subtitles` | forced subtitles built from the translated foreign-language lines of HI subtitles on disk (provider, off by default) | development | done, tested, checked on the live library | yes |
+| `feature/forced-from-hi-subtitles` | forced subtitles built from the translated foreign-language lines of HI subtitles on disk (provider, off by default) | development | not merged: covers 28% of real forced lines, must match them | no |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
 Implementation order: fix branches → FR2 → FR1 → FR3.
