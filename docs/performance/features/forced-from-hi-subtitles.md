@@ -25,3 +25,14 @@ untagged continuation lines are missed.
 - Against the 41 episodes that have both a built and a real forced subtitle: 148 of 159 built lines (93%) are in the
   real forced subtitle, but they cover 116 of its 888 lines (13%).
 - Some tagged "translations" are the original words (`Merci.`, `Ándele. Okay?`).
+
+## Comparison with existing forced subtitles (2026-09-27)
+Every movie and episode with both an English HI and a real forced subtitle (263): forced lines were built for 72; 9
+were skipped because their "forced" file is really a full subtitle, leaving 63 compared. Each built line was compared
+with the real forced line shown within 1.5 s (text similarity ≥ 0.6).
+- First run found translated lines wrapped onto a second subtitle line were cut after the first line ("You'll" for
+  "You'll have to come to Mexico."); fixed by taking whole speaker turns. Numbered speaker labels
+  (`POLICE OFFICER 1:`) are removed too.
+- After the fix: 278 of 319 built lines (87%) match the real forced subtitle; they cover 414 of its 1,755 lines (24%).
+- The other 41 are mostly foreign words the HI file writes out as spoken (`Más café?`, `C'est la vie.`, `Da.`,
+  `Saludos.`) that the real forced subtitle doesn't show, and a few short lines around untranslated scenes.
