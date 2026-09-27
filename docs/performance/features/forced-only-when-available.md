@@ -9,21 +9,27 @@ Nothing in Sonarr, Radarr, TMDB or TVDB (v4 API: episode records only carry name
 is found (indexed forced subtitles, embedded or external, and forced subtitles in history) versus episodes searched
 without result (`failedAttempts`):
 
-- **Movies**: wanted if the movie has a forced subtitle, else if TMDB lists more than one spoken language, else until
-  forced subtitles were first searched longer than `forced_evidence_grace_days` ago.
-- **Episodes**: an episode of a series TMDB lists with a single spoken language and without any forced subtitle
-  doesn't want them. Otherwise every episode is searched once (and gets the grace period); after that, an episode
-  without forced subtitles keeps wanting them only if the series needs them throughout: at least 4 checked episodes
-  and at least `forced_series_ratio` percent (default 25) of them have forced subtitles. Library data: 95 series have
-  forced subtitles; 35 have them in 50%+ of episodes (Pachinko, Game of Thrones 67%), Better Call Saul 43%, Breaking
-  Bad 37%, while 22 have them in under 10% (Ted Lasso, Atlanta, Arrested Development: 1 episode out of 41–84).
-- A forced subtitle in one episode doesn't make the whole series want them (an earlier version did).
+- **Movies and episodes** with a forced subtitle keep wanting it.
+- A title TMDB lists with a single spoken language, without any forced subtitle, doesn't want them (not searched).
+- Otherwise every movie and episode is searched once and stops wanting forced subtitles when that search, done longer
+  than `forced_evidence_grace_days` ago, found nothing. Releases leave brief or story-irrelevant foreign dialogue
+  untranslated, and where no translation exists no forced subtitle exists.
+- Neighbouring episodes don't decide for each other. An earlier version kept a whole series wanting forced when at
+  least `forced_series_ratio` percent (25) of its checked episodes had them; that kept ~615 episodes wanted on a guess
+  (The Blacklist: 66 of 218 episodes have forced, the other 152 stayed wanted) and was removed on 2026-09-27. Movies
+  with several TMDB spoken languages used to stay wanted forever for the same reason.
 
-TMDB answers are kept in the existing subtitles cache for 30 days; errors back off 10 minutes and aren't cached. Uses
-Bazarr's bundled TMDB key unless `general.tmdb_api_key` is set. Changing the settings recomputes missing subtitles.
+TMDB answers are kept in the subtitles cache (`SHOW_EXPIRATION_TIME`); a TMDB error stops lookups for the current
+recompute and isn't cached. Uses Bazarr's bundled TMDB key unless `general.tmdb_api_key` is set. Changing the settings
+recomputes missing subtitles; code changes need a reindex (Index All Existing Episodes/Movies Subtitles).
 Settings (Subtitles → Search → Performance): `forced_only_when_available` (off by default), `forced_evidence_use_tmdb`
-(on), `forced_evidence_grace_days` (7; live instance uses 1), `forced_series_ratio` (25), `tmdb_api_key` (optional).
+(on), `forced_evidence_grace_days` (7; live instance uses 1), `tmdb_api_key` (optional).
 How often the remaining forced requirements are retried is left to Bazarr's adaptive searching.
+
+HI subtitles were checked as per-episode evidence (2026-09-27): HI files tag foreign speech (`[IN ITALIAN]`,
+`(speaking Persian)`), 57% of HI files of episodes with forced subtitles vs 18% of the others. 65% of tagged lines are
+tag only (no translation exists, or it's burned in); of the 618 episodes then wanting forced, 27 had a translated
+tagged line (median 1 line), so generating forced subtitles from HI files wasn't worth building.
 
 ## Live result (2026-09-25)
 Wanted episodes 6,631 → 2,800 and movies 617 → 181 after enabling (recompute took 220 s). Remaining: 1,673 episodes
