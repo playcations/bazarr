@@ -1,6 +1,6 @@
 # Forced subtitles built from hearing impaired subtitles
 
-Branch: `feature/forced-from-hi-subtitles` (from `development`). Status: **not merged into `integration/performance`**.
+Branch: `feature/forced-from-hi-subtitles` (from `development`). Status: **dropped (2026-09-27), branch deleted**.
 Acceptance criterion (user, 2026-09-27): generated forced subtitles must match the real forced subtitles; the best
 version covers 28% of their lines, so it stays on its branch.
 
@@ -65,3 +65,19 @@ titles got forced subtitles for English signs).
 Where the rest is (same 197 titles): 29% of real forced lines aren't in the HI file at all, 31% are in HI files that
 tag no foreign speech anywhere (many are forced files that also carry English lines), 9% are over 60 s from any
 foreign tag; about 7% is near a tag and still missed.
+
+## Where it only has something to work with (2026-09-27)
+Of 4,599 English HI files, 23% tag foreign speech and 6% (296) have at least one translated tag. On the 59 titles whose
+HI file has translated tags and contains 80%+ of the real forced lines: 69% of real lines reproduced, 72% of generated
+lines real, exact 1:1 match for 6 (10%), every real line (plus extras) for 14.
+
+## Final round: regular subtitles and other markers
+- Regular English subtitles (30 titles with a real forced subtitle): they hold about half the forced lines, but
+  italics pick forced lines 1% of the time and capitals 12%; only 34 of 439 forced lines found in HI files were missing
+  from the regular file, so absence isn't a signal either.
+- HI markers (195 titles, 2,640 real forced lines present): foreign tag on the line 75% precise, tag within 10 s 40%,
+  capitals 50% (all already used); italics, `{\an8}`, music notes and quotes ~0-1%; no ASS styles in these files. At
+  least 1,500 forced lines present in HI files carry no marker at all.
+
+Dropped: forced subtitles built from local subtitle files can't match real forced subtitles. No subtitles were ever
+created by it on the live instance (provider never enabled, no history entries); all measurements were read-only.
