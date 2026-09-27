@@ -40,7 +40,7 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `feature/gestdown-season-cache` | Gestdown whole-season listings and show lookups in the subtitles cache, 429/Retry-After handling | development | done, tested (live API) | yes |
 | `feature/subdl-season-search-cache` | SubDL season-only/title-only searches in the subtitles cache | development | done, tested | yes |
 | `feature/cache-settings` | search results reuse in the existing subtitles cache, configurable cache retention, cache UI/API, thread-safe backend | development | done, tested, live | yes |
-| `feature/forced-only-when-available` | forced subtitles only wanted for titles with forced evidence or several TMDB spoken languages | development | done, tested, live | yes |
+| `feature/forced-only-when-available` | forced subtitles wanted per movie/episode until searched once (kept where found, skipped for single-language titles on TMDB) | development | done, tested, live | yes |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
 Implementation order: fix branches → FR2 → FR1 → FR3.
