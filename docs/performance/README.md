@@ -18,6 +18,7 @@ proposed upstream. All options ship with defaults that preserve legacy behavior;
 | `research/provider-audit-2026-09-25.md` | Per-provider audit for FR1–FR3, Gestdown deep-dive. |
 | `deploy/` | Running the integration build on the TrueNAS server (image, custom app, rollback). |
 | `features/search-cache.md` | Search results reuse through the existing subtitles cache, cache settings. |
+| `features/forced-from-hi-subtitles.md` | Provider building forced subtitles from the translated lines of HI subtitles on disk. |
 | `features/forced-only-when-available.md` | Forced subtitles only wanted for titles that have them (evidence, TMDB spoken languages). |
 
 Where a source document and a feature plan disagree, the feature plan (backed by the research file) wins.
@@ -41,6 +42,7 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `feature/subdl-season-search-cache` | SubDL season-only/title-only searches in the subtitles cache | development | done, tested | yes |
 | `feature/cache-settings` | search results reuse in the existing subtitles cache, configurable cache retention, cache UI/API, thread-safe backend | development | done, tested, live | yes |
 | `feature/forced-only-when-available` | forced subtitles wanted per movie/episode until searched once (kept where found, skipped for single-language titles on TMDB) | development | done, tested, live | yes |
+| `feature/forced-from-hi-subtitles` | forced subtitles built from the translated foreign-language lines of HI subtitles on disk (provider, off by default) | development | not merged: covers 28% of real forced lines, must match them | no |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
 Implementation order: fix branches → FR2 → FR1 → FR3.
