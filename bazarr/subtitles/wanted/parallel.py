@@ -13,6 +13,7 @@ import threading
 
 from concurrent.futures import ThreadPoolExecutor
 
+from subliminal_patch.core import LAST_RESORT_PROVIDERS
 from subliminal_patch.provider_limits import provider_limits
 
 from app.config import settings
@@ -105,6 +106,8 @@ def search_item(handler, item_id, wait_if_busy=False):
         while remaining:
             candidates = [name for name in (get_providers() or [])
                           if name not in tried and not (use_fallback and name == WHISPER_PROVIDER)]
+            # last resort providers only get their turn once all the others were tried
+            candidates = [name for name in candidates if name not in LAST_RESORT_PROVIDERS] or candidates
             if not candidates:
                 break
             provider, reservation = _reserve_provider(candidates)

@@ -332,3 +332,20 @@ def test_waiting_for_a_provider_held_back_by_its_interval():
     provider, _ = limits.reserve_any(["tvsubtitles"])
     assert provider == "tvsubtitles"
     assert 0.05 < time.monotonic() - started < 0.5
+
+
+def test_last_resort_providers_are_tried_after_all_the_others(runner):
+    handler = FakeHandler({1: ["en"]}, {(1, "hiregular"): ["en"]})
+
+    runner(handler, [1], ["hiregular"] + PROVIDERS)
+
+    assert handler.searches[-1] == (1, "hiregular")
+    assert sorted(provider for _, provider in handler.searches[:-1]) == sorted(PROVIDERS)
+
+
+def test_last_resort_providers_are_not_tried_when_another_provider_found_the_subtitle(runner):
+    handler = FakeHandler({1: ["en"]}, {(1, "hiregular"): ["en"], (1, "subdl"): ["en"]})
+
+    runner(handler, [1], ["hiregular", "subdl"])
+
+    assert handler.searches == [(1, "subdl")]
