@@ -39,6 +39,11 @@ What the ***** was that?
 00:00:22,000 --> 00:00:24,000
 - [door creaks]
 - Who's there?
+
+9
+00:00:25,000 --> 00:00:27,000
+<i>DAVID: I'm not sure my visions
+are really from God.</i>
 """
 
 
@@ -64,6 +69,7 @@ def test_lyrics_censored_words_and_formatting_are_kept():
     assert "Sweet home Alabama" in regular
     assert "What the ##### was that?" in regular
     assert "<i>I told you so.</i>" in regular
+    assert "<i>I'm not sure my visions\nare really from God.</i>" in regular   # speaker label in italics removed
 
 
 def test_timing_is_kept():
@@ -193,3 +199,14 @@ def test_subtitle_ids_are_unique_per_source():
     subtitle = HIRegularSubtitle(Language("eng"), "/tv/a.en.hi.srt", "a.en.hi.srt", "series", content="x")
 
     assert subtitle.id == "/tv/a.en.hi.srt:regular"
+
+
+@pytest.mark.parametrize("line, expected", [
+    ("<i>DAVID: Sister...</i>", "<i>Sister...</i>"),
+    ("- <i>LELAND: Andy?</i>\n- Yes.", "- <i>Andy?</i>\n- Yes."),
+    ("<i>He said: run.</i>", "<i>He said: run.</i>"),          # not a speaker label
+])
+def test_speaker_labels_after_formatting_are_removed(line, expected):
+    regular = _text(build_regular(f"1\n00:00:01,000 --> 00:00:02,000\n{line}\n".encode("utf-8"), Language("eng")))
+
+    assert expected in regular

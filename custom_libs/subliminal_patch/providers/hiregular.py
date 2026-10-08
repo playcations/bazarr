@@ -24,6 +24,7 @@ from subliminal_patch.core import Episode, Movie, parse_for_hi_regex, search_ext
 from subliminal_patch.providers import Provider
 from subliminal_patch.providers.embeddedsubtitles import EmbeddedSubtitlesProvider
 from subliminal_patch.subtitle import Subtitle
+from subzero.modification.mods.hearing_impaired import HearingImpaired
 from subzero.language import Language
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,9 @@ _STARRED = re.compile(r"\*([^*\n]{3,}?)\*")
 # formatting overrides like {\i1} and {\an8} aren't tags
 _TAG = re.compile(r"[\[({](?!\\)[^\[\](){}\n]{3,}?[\])}]")
 _DASH_ONLY = re.compile(r"^\s*-?[\s:]*$")
+# remove_HI only finds speaker labels at the start of a line, not after formatting like {\i1}DAVID: Sister...
+_SPEAKER = next(p.pattern for p in HearingImpaired.processors if p.name == "HI_before_colon_caps")
+_LEADING_FORMATTING = re.compile(r"^([\s-]*(?:\{\\[^}]*\})+)(.*)$")
 _DASH = re.compile(r"^-\s*")
 
 
@@ -72,6 +76,9 @@ def build_regular(raw, language):
         lines = []
         for line in event.text.split("\\N"):
             line = _TAG.sub("", line).replace(_CENSORED_PLACEHOLDER, "#")
+            formatted = _LEADING_FORMATTING.match(line)
+            if formatted:
+                line = formatted.group(1) + _SPEAKER.sub("", formatted.group(2))
             line = re.sub(r"\s{2,}", " ", _DASH_ONLY.sub("", line)).strip()
             if line:
                 lines.append(line)
