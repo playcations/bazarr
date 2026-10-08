@@ -198,3 +198,9 @@ def test_reset_throttled_providers_also_resets_the_count(monkeypatch, _throttle_
     get_providers.reset_throttled_providers()
 
     assert "provider" not in _throttle_count
+
+
+def test_get_providers_auth_hiregular_reads_embedded_tracks_as_hi():
+    item = get_providers.get_providers_auth()["hiregular"]["embedded_config"]
+    embedded = get_providers.get_providers_auth()["embeddedsubtitles"]
+    assert item == {**embedded, "hi_fallback": False}

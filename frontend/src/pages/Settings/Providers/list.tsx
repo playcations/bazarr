@@ -260,6 +260,12 @@ export const ProviderList: Readonly<ProviderInfo[]> = [
     ],
   },
   {
+    key: "hiregular",
+    name: "Regular From HI Subtitles",
+    description:
+      "Makes regular subtitles from the hearing impaired subtitles next to your media or embedded in it, removing sound descriptions, speaker labels and music markers. Only used when no other provider has usable regular subtitles. Doesn't search anywhere; embedded tracks are read with the Embedded Subtitles settings.",
+  },
+  {
     key: "jimaku",
     name: "Jimaku.cc",
     description: "Japanese Subtitles Provider",

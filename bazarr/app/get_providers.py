@@ -259,7 +259,7 @@ def _get_mediainfo_binary():
 
 
 def get_providers_auth():
-    return {
+    providers_auth = {
         'addic7ed': {
             'username': settings.addic7ed.username,
             'password': settings.addic7ed.password,
@@ -401,6 +401,9 @@ def get_providers_auth():
             'include_machine_translated': settings.subtitlecat.include_machine_translated,
         },
     }
+    # regular subtitles from HI read embedded tracks the way the embedded subtitles provider is set up, keeping them HI
+    providers_auth['hiregular'] = {'embedded_config': {**providers_auth['embeddedsubtitles'], 'hi_fallback': False}}
+    return providers_auth
 
 
 # download.py doesn't have an exception with the id and media type on it, so can't take an exception 

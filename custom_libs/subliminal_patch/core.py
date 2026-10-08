@@ -64,6 +64,9 @@ HI_REGEX_WITH_PARENTHESIS = re.compile(r'[*¶♫♪].{3,}[*¶♫♪]|[\[\(\{].{3
 # mislabel ordinary subtitles as hearing-impaired.
 HI_REGEX_PARENTHESIS_EXCLUDED_LANGUAGES = ['ara', 'fas']
 
+# providers only used when no subtitle of the other providers could be downloaded for a language
+LAST_RESORT_PROVIDERS = ('hiregular',)
+
 
 def _hi_content_key(subtitle):
     return f'hi_content.{subtitle.provider_name}.{subtitle.id}'
@@ -751,18 +754,28 @@ class SZProviderPool(ProviderPool):
             unsorted_subtitles.append(
                 (s, score, score_without_hash, matches, orig_matches))
 
-        # sort subtitles by score
-        scored_subtitles = sorted(unsorted_subtitles, key=operator.itemgetter(1, 2), reverse=True)
+        # sort subtitles by score, last resort providers after all the others
+        scored_subtitles = sorted(unsorted_subtitles, key=lambda x: (x[0].provider_name not in LAST_RESORT_PROVIDERS,
+                                                                    x[1], x[2]), reverse=True)
 
         # download best subtitles, falling back on the next on error
         downloaded_subtitles = []
+        below_min_score = False
         for subtitle, score, score_without_hash, matches, orig_matches in scored_subtitles:
+            last_resort = subtitle.provider_name in LAST_RESORT_PROVIDERS
+            if below_min_score and not last_resort:
+                continue
+
             # check score
             if score < min_score:
                 min_score_in_percent = round(min_score * 100 / max_score, 2) if min_score > 0 else 0
                 logger.info('%r: Score %d is below min_score: %d out of %d (or %r%%)',
                             subtitle, score, min_score, max_score, min_score_in_percent)
-                break
+                if last_resort:
+                    break
+                # the other subtitles score lower, but last resort ones get their turn
+                below_min_score = True
+                continue
 
             # stop when all languages are downloaded
             if set(str(s.language) for s in downloaded_subtitles) == languages:
