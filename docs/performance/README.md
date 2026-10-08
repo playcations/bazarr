@@ -19,6 +19,7 @@ proposed upstream. All options ship with defaults that preserve legacy behavior;
 | `deploy/` | Running the integration build on the TrueNAS server (image, custom app, rollback). |
 | `features/search-cache.md` | Search results reuse through the existing subtitles cache, cache settings. |
 | `features/forced-from-hi-subtitles.md` | Provider building forced subtitles from the translated lines of HI subtitles on disk. |
+| `features/regular-from-hi-subtitles.md` | Provider making regular subtitles from the video's own HI subtitles, used as a last resort. |
 | `features/forced-only-when-available.md` | Forced subtitles only wanted for titles that have them (evidence, TMDB spoken languages). |
 
 Where a source document and a feature plan disagree, the feature plan (backed by the research file) wins.
@@ -43,6 +44,7 @@ All branch from `upstream/development` (CONTRIBUTING: features branch from `deve
 | `feature/cache-settings` | search results reuse in the existing subtitles cache, configurable cache retention, cache UI/API, thread-safe backend | development | done, tested, live | yes |
 | `feature/forced-only-when-available` | forced subtitles wanted per movie/episode until searched once (kept where found, skipped for single-language titles on TMDB) | development | done, tested, live | yes |
 | `feature/forced-from-hi-subtitles` | forced subtitles built from the translated foreign-language lines of HI subtitles on disk (provider, off by default) | development | dropped: can't match real forced subtitles (10% exact where HI has translations); branch deleted | no |
+| `feature/regular-from-hi` | regular subtitles made from the video's own HI subtitles (provider, last resort, off by default) | FR3 | done, tested, live: regular-missing episodes 301 → 117, movies 22 → 3 | yes, after FR3 |
 | `integration/performance` | merge of all the above for personal use; rebuilt on development periodically | development | active | no |
 
 Implementation order: fix branches → FR2 → FR1 → FR3.
@@ -60,6 +62,7 @@ pretty-quick and stylelint.
 | FR1 | `general.pack_reuse` | Subtitles → Search ("Subtitle packs") |
 | Cache | `cache.search_results_hours`, `cache.retention_days`, `cache.archive_retention_days` | Scheduler → Cache |
 | Forced | `general.forced_only_when_available`, `general.forced_evidence_use_tmdb`, `general.forced_evidence_grace_days`, `general.tmdb_api_key` | Subtitles → Search (Performance) |
+| Regular from HI | provider `hiregular` in `general.enabled_providers` (embedded tracks use the `embeddedsubtitles` settings) | Providers → "Regular From HI Subtitles" |
 | FR3 | `general.wanted_parallel_enabled`, `general.wanted_max_active_items`, `general.provider_default_max_in_flight`, `general.provider_limits`, `general.local_io_max_in_flight`, (`general.persistence_batching`) | Subtitles → Search ("Wanted performance"), Providers → Advanced |
 
 Per setting the work is: `Validator` in `bazarr/app/config.py`; type in `frontend/src/types/settings.d.ts`; component
