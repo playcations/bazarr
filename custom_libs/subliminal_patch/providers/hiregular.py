@@ -109,18 +109,27 @@ def _external_path(video_path, name):
     return None
 
 
+def _read_regular(hi_path, language):
+    try:
+        with open(hi_path, "rb") as file:
+            return build_regular(file.read(), language)
+    except OSError as error:
+        logger.debug("Couldn't read %s: %s", hi_path, error)
+        return None
+
+
 class HIRegularSubtitle(Subtitle):
     provider_name = "hiregular"
     hash_verifiable = False
 
-    def __init__(self, language, source_id, release_info, media_type, content=None, embedded=None):
+    def __init__(self, language, source_id, release_info, media_type, hi_path=None, embedded=None):
         super().__init__(language)
         self.source_id = source_id
         self.page_link = source_id
         self.release_info = release_info
         self.media_type = media_type
+        self.hi_path = hi_path
         self.embedded = embedded
-        self._regular_content = content
 
     @property
     def id(self):
@@ -174,16 +183,11 @@ class HIRegularProvider(Provider):
             hi_path = _external_path(path, name)
             if not hi_path:
                 continue
-            try:
-                with open(hi_path, "rb") as file:
-                    content = build_regular(file.read(), wanted[language.basename])
-            except OSError as error:
-                logger.debug("Couldn't read %s: %s", hi_path, error)
-                continue
-            if content:
-                logger.debug("Built regular subtitles from %s", hi_path)
+            # only offered when they convert; they're converted again when downloaded, as search results may be
+            # reused from the cache after the file or this conversion changed
+            if _read_regular(hi_path, wanted[language.basename]):
                 subtitles.append(HIRegularSubtitle(wanted.pop(language.basename), hi_path, name, media_type,
-                                                   content=content))
+                                                   hi_path=hi_path))
 
         if wanted and self._embedded:
             subtitles.extend(self._list_embedded(video, path, wanted, media_type))
@@ -209,9 +213,10 @@ class HIRegularProvider(Provider):
         if subtitle.embedded is not None:
             # embedded tracks are only extracted when their turn comes
             self._embedded.download_subtitle(subtitle.embedded)
-            if subtitle.embedded.content:
-                subtitle._regular_content = build_regular(subtitle.embedded.content, subtitle.language)
-            if not subtitle._regular_content:
-                logger.info("%r: Couldn't make regular subtitles from this embedded track", subtitle)
-                return
-        subtitle.content = subtitle._regular_content
+            content = build_regular(subtitle.embedded.content, subtitle.language) if subtitle.embedded.content else None
+        else:
+            content = _read_regular(subtitle.hi_path, subtitle.language)
+        if not content:
+            logger.info("%r: Couldn't make regular subtitles from %s", subtitle, subtitle.source_id)
+            return
+        subtitle.content = content

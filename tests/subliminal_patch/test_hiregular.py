@@ -196,7 +196,7 @@ def test_embedded_tracks_are_read_with_the_embedded_subtitles_settings(tmp_path)
 
 
 def test_subtitle_ids_are_unique_per_source():
-    subtitle = HIRegularSubtitle(Language("eng"), "/tv/a.en.hi.srt", "a.en.hi.srt", "series", content="x")
+    subtitle = HIRegularSubtitle(Language("eng"), "/tv/a.en.hi.srt", "a.en.hi.srt", "series", hi_path="/tv/a.en.hi.srt")
 
     assert subtitle.id == "/tv/a.en.hi.srt:regular"
 
@@ -210,3 +210,17 @@ def test_speaker_labels_after_formatting_are_removed(line, expected):
     regular = _text(build_regular(f"1\n00:00:01,000 --> 00:00:02,000\n{line}\n".encode("utf-8"), Language("eng")))
 
     assert expected in regular
+
+
+def test_hi_file_is_converted_again_when_downloaded(tmp_path):
+    # search results may come from the cache: the download reflects the HI file as it is now
+    video = _video(tmp_path)
+    hi_file = tmp_path / f"{NAME}.en.hi.srt"
+    hi_file.write_text(HI)
+    provider = HIRegularProvider()
+    (subtitle,) = provider.list_subtitles(video, {Language("eng")})
+
+    hi_file.write_text("1\n00:00:01,000 --> 00:00:02,000\n[KEVIN] Something new.\n")
+    provider.download_subtitle(subtitle)
+
+    assert b"Something new." in subtitle.content and b"What a story" not in subtitle.content
