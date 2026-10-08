@@ -108,7 +108,7 @@ def test_provider_offers_regular_subtitles_from_the_hi_file(tmp_path):
     provider.download_subtitle(subtitle)
     assert subtitle.is_valid()
     assert b"What a story this is." in subtitle.content and b"Kevin" not in subtitle.content
-    assert {"series", "season", "episode"} <= subtitle.get_matches(video)
+    assert subtitle.get_matches(video) == {"hash"}   # the video's own subtitles, whatever the file name says
 
 
 @pytest.mark.parametrize("existing, wanted", [

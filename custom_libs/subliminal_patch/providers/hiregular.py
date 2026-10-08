@@ -19,12 +19,11 @@ import re
 
 import pysubs2
 from babelfish import language_converters
-from guessit import guessit
 from subliminal_patch import core
 from subliminal_patch.core import Episode, Movie, parse_for_hi_regex, search_external_subtitles
 from subliminal_patch.providers import Provider
 from subliminal_patch.providers.embeddedsubtitles import EmbeddedSubtitlesProvider
-from subliminal_patch.subtitle import Subtitle, guess_matches
+from subliminal_patch.subtitle import Subtitle
 from subzero.language import Language
 
 logger = logging.getLogger(__name__)
@@ -121,9 +120,9 @@ class HIRegularSubtitle(Subtitle):
         return f"{self.source_id}:regular"
 
     def get_matches(self, video):
-        guess_type = "episode" if isinstance(video, Episode) else "movie"
-        # the hearing impaired subtitles belong to this video: their file is named after it, or it's a track of it
-        return guess_matches(video, guessit(self.release_info, {"type": guess_type}))
+        # made from this video's own hearing impaired subtitles (a track of it or the file named after it), so they fit
+        # the file like embedded subtitles do; the file name alone often lacks the year or release group
+        return {"hash"}
 
 
 class HIRegularProvider(Provider):
